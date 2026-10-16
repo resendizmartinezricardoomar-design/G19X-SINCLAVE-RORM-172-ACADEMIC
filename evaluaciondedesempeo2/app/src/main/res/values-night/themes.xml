@@ -1,0 +1,8 @@
+<resources>
+    <!-- Forzamos tema claro incluso en noche para evitar cierres -->
+    <style name="Base.Theme.EvaluacionDeDesempeno" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#6366F1</item>
+        <item name="android:windowBackground">#F8FAFC</item>
+        <item name="android:statusBarColor">#6366F1</item>
+    </style>
+</resources>

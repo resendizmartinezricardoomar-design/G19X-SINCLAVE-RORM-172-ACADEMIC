@@ -1,0 +1,19 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Fondo redondeado suave estilo Premium -->
+    <path
+        android:fillColor="#6366F1"
+        android:pathData="M25,5H75A20,20 0,0 1,95 25V75A20,20 0,0 1,75 95H25A20,20 0,0 1,5 75V25A20,20 0,0 1,25 5Z" />
+    <!-- Icono de capas blancas apiladas -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,28L22,40L50,52L78,40L50,28Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M22,52L50,64L78,52M22,64L50,76L78,64" />
+</vector>

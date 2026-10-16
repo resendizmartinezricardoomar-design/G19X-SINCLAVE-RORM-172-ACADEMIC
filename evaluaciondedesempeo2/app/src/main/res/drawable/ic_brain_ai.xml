@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Círculo de fondo con degradado simulado -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M50,10A40,40 0,1 0,50 90A40,40 0,1 0,50 10" />
+    <!-- Icono Cerebro/IA -->
+    <path
+        android:fillColor="#6366F1"
+        android:pathData="M45,30C40,30 35,34 35,40C35,42 36,44 37,46C34,48 32,51 32,55C32,60 36,65 41,65C42,65 43,65 44,64C46,67 50,69 54,69C60,69 65,64 65,58C65,54 63,51 60,49C61,47 62,45 62,43C62,38 58,34 53,34C52,34 51,34 50,35C48,32 46,30 45,30Z" />
+    <!-- Circuitos -->
+    <path
+        android:strokeColor="#A5B4FC"
+        android:strokeWidth="1.5"
+        android:pathData="M35,45H25M35,55H25M45,65V75" />
+    <!-- Flecha de crecimiento -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M40,75L60,45L75,45M60,45L55,50" />
+</vector>

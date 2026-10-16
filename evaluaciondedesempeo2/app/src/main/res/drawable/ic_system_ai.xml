@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Círculo de fondo oscuro -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M50,50m-48,0a48,48 0,1 1,96 0a48,48 0,1 1,-96 0" />
+    <!-- Silueta Persona (Azul) -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M50,45c5.5,0 10,-4.5 10,-10s-4.5,-10 -10,-10 -10,4.5 -10,10 4.5,10 10,10zM50,48c-8,0 -20,4 -20,12v4h40v-4c0,-8 -12,-12 -20,-12z" />
+    <!-- Cerebro/Circuitos (Cian) -->
+    <path
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="1.5"
+        android:pathData="M35,35c0,-8 5,-12 10,-12M32,45h-6M32,55h-6" />
+    <!-- Gráfico y Flecha de Crecimiento -->
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M65,65h5v-10h-5zM75,65h5v-18h-5zM85,65h5v-25h-5z" />
+    <path
+        android:strokeColor="#6366F1"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M30,70c10,0 25,-5 60,-35" />
+    <path
+        android:fillColor="#6366F1"
+        android:pathData="M90,35l-8,2l3,6z" />
+</vector>
