@@ -1,31 +1,23 @@
 /**
- * InsightHR Unified Dashboard Engine - v1000.10.0
- * Full Audit Integration
+ * InsightHR Unified Dashboard Engine - v1000.19.0
+ * ESTABILIDAD TOTAL: Login, Dashboard, Talent, Compare, Audits (ADMIN FIX) & IA
  */
 
 const API_BASE = "http://localhost:8000/api";
 let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 let mainChart = null;
 let compareChart = null;
-let allUsers = [];
-
-// Mapeo exacto de los 12 ejes del radar
-const AUDIT_METRICS = [
-    { id: "obj_cumplimiento", label: "Objetivos", desc: "Cumplimiento de metas y KPIs" },
-    { id: "puntualidad_asistencia", label: "Puntualidad", desc: "Disciplina y puntualidad" },
-    { id: "calidad_trabajo", label: "Calidad", desc: "Excelencia en entregables" },
-    { id: "productividad", label: "Productividad", desc: "Eficiencia y rendimiento" },
-    { id: "trabajo_equipo", label: "Equipo", desc: "Colaboración proactiva" },
-    { id: "conocimiento_habilidad", label: "Habilidad", desc: "Competencia técnica" },
-    { id: "comunicacion", label: "Comunicación", desc: "Claridad y escucha" },
-    { id: "adaptabilidad", label: "Adaptabilidad", desc: "Flexibilidad al cambio" },
-    { id: "iniciativa", label: "Iniciativa", desc: "Proactividad propia" },
-    { id: "responsabilidad", label: "Responsabilidad", desc: "Compromiso con tareas" },
-    { id: "actitud_profesional", label: "Actitud", desc: "Ética y comportamiento" },
-    { id: "desarrollo_profesional", label: "Desarrollo", desc: "Crecimiento y aprendizaje" }
-];
-
 let auditScores = {};
+
+// 12 ejes estratégicos
+const AUDIT_METRICS = [
+    { id: "obj_cumplimiento", label: "Objetivos" }, { id: "puntualidad_asistencia", label: "Puntualidad" },
+    { id: "calidad_trabajo", label: "Calidad" }, { id: "productividad", label: "Productividad" },
+    { id: "trabajo_equipo", label: "Equipo" }, { id: "conocimiento_habilidad", label: "Habilidad" },
+    { id: "comunicacion", label: "Comunicación" }, { id: "adaptabilidad", label: "Adaptabilidad" },
+    { id: "iniciativa", label: "Iniciativa" }, { id: "responsabilidad", label: "Responsabilidad" },
+    { id: "actitud_profesional", label: "Actitud" }, { id: "desarrollo_profesional", label: "Desarrollo" }
+];
 
 async function apiFetch(endpoint, options = {}) {
     try {
@@ -33,24 +25,35 @@ async function apiFetch(endpoint, options = {}) {
             options.headers = { ...options.headers, 'Content-Type': 'application/json' };
         }
         const response = await fetch(`${API_BASE}${endpoint}`, options);
-        const data = await response.json();
-        if (!response.ok) {
-            alert("❌ ERROR: " + (data.detail || "Fallo en la operación"));
-            return null;
-        }
-        return data;
-    } catch (e) {
-        console.error("Connection error:", e);
-        return null;
-    }
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (e) { return null; }
 }
 
 // --- NAVEGACIÓN ---
 window.showSection = function(sectionId, btnElement) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.add('hidden'));
-    document.getElementById(`section-${sectionId}`).classList.remove('hidden');
+    const section = document.getElementById(`section-${sectionId}`);
+    if (section) section.classList.remove('hidden');
+
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     if (btnElement) btnElement.classList.add('active');
+
+    // FIX: Título y Visibilidad del botón de Auditoría
+    const titles = { 'dashboard': 'Dashboard General', 'talent': 'Gestión de Talento', 'compare': 'Comparativa Estratégica', 'evaluations': 'Historial de Auditorías' };
+    if (titles[sectionId]) document.getElementById('page-title').innerText = titles[sectionId];
+
+    const btnNew = document.getElementById('btn-show-audit');
+    if (btnNew) {
+        // Validación de rol flexible (ADMIN o admin)
+        const isAdmin = currentUser && currentUser.rol && currentUser.rol.toUpperCase() === 'ADMIN';
+        if (isAdmin && sectionId === 'evaluations') {
+            btnNew.style.display = 'block';
+            btnNew.classList.remove('hidden');
+        } else {
+            btnNew.style.display = 'none';
+        }
+    }
 
     if (sectionId === 'dashboard') renderDashboard();
     if (sectionId === 'talent') renderTalent();
@@ -58,53 +61,43 @@ window.showSection = function(sectionId, btnElement) {
     if (sectionId === 'evaluations') renderAuditHistory();
 };
 
+// --- MÓDULO AUDITORÍAS ---
 async function renderAuditHistory() {
     const table = document.getElementById('historyTable');
-    const btnNew = document.getElementById('btn-show-audit');
     if (!table) return;
 
-    if (currentUser && currentUser.rol === 'ADMIN') {
-        if (btnNew) btnNew.classList.remove('hidden');
-        const employees = await apiFetch('/empleados');
-        if (employees) {
-            document.getElementById('audit-user-select').innerHTML =
-                employees.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
+    if (currentUser && currentUser.rol.toUpperCase() === 'ADMIN') {
+        const emps = await apiFetch('/empleados');
+        const select = document.getElementById('audit-user-select');
+        if (select && emps) {
+            select.innerHTML = emps.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
         }
         renderAuditQuestions();
     }
 
     const evals = await apiFetch('/evaluaciones');
-    if (!evals || evals.length === 0) {
-        table.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-slate-300 font-bold uppercase text-[10px]">No hay auditorías registradas</td></tr>';
-        return;
+    if (evals) {
+        table.innerHTML = evals.map(e => `
+            <tr class="border-b border-slate-50 text-xs hover:bg-slate-50 transition-colors">
+                <td class="px-8 py-4 font-bold text-slate-400">${e.fecha}</td>
+                <td class="px-8 py-4 font-black text-slate-700">${e.evaluado_nombre}</td>
+                <td class="px-8 py-4 text-center"><span class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-black">${e.puntuacion_promedio}</span></td>
+                <td class="px-8 py-4 text-right">
+                    <button onclick="downloadReport(${e.evaluado_id}, '${e.evaluado_nombre}')" class="text-blue-600 font-black uppercase text-[10px] hover:underline">Descargar</button>
+                </td>
+            </tr>
+        `).join('');
     }
-
-    table.innerHTML = evals.map(e => `
-        <tr class="hover:bg-slate-50 transition-colors">
-            <td class="px-8 py-6 text-xs text-slate-400 font-bold">${e.fecha}</td>
-            <td class="px-8 py-6 font-bold text-slate-700">${e.evaluado_nombre || 'Usuario'}</td>
-            <td class="px-8 py-6 text-center">
-                <span class="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl font-black">${e.puntuacion_promedio}</span>
-            </td>
-            <td class="px-8 py-6 text-right">
-                <button onclick="downloadReport(${e.evaluado_id}, '${e.evaluado_nombre}')" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all">PDF</button>
-            </td>
-        </tr>
-    `).join('');
 }
 
 function renderAuditQuestions() {
-    const container = document.getElementById('audit-questions-grid');
-    if (!container) return;
-
-    container.innerHTML = AUDIT_METRICS.map(m => `
+    const grid = document.getElementById('audit-questions-grid');
+    if (!grid) return;
+    grid.innerHTML = AUDIT_METRICS.map(m => `
         <div class="audit-card">
-            <p class="q-label mb-1">${m.label}</p>
-            <p class="text-[9px] text-slate-400 uppercase font-medium tracking-tighter">${m.desc}</p>
+            <p class="text-[10px] font-black text-slate-700 uppercase mb-1">${m.label}</p>
             <div class="rating-box" id="group-${m.id}">
-                ${[1, 2, 3, 4, 5].map(v => `
-                    <button type="button" onclick="setRating('${m.id}', ${v})" class="rate-btn" data-val="${v}">${v}</button>
-                `).join('')}
+                ${[1, 2, 3, 4, 5].map(v => `<button type="button" onclick="setRating('${m.id}', ${v})" class="rate-btn" data-val="${v}">${v}</button>`).join('')}
             </div>
         </div>
     `).join('');
@@ -112,112 +105,60 @@ function renderAuditQuestions() {
 
 window.setRating = function(metricId, value) {
     auditScores[metricId] = value;
-    const btns = document.querySelectorAll(`#group-${metricId} .rate-btn`);
-    btns.forEach(b => {
+    document.querySelectorAll(`#group-${metricId} .rate-btn`).forEach(b => {
         b.classList.remove('selected');
         if (parseInt(b.dataset.val) === value) b.classList.add('selected');
     });
 };
 
+window.toggleAuditPanel = function() {
+    const panel = document.getElementById('audit-form-panel');
+    if (panel) panel.classList.toggle('hidden');
+};
+
 window.submitPremiumAudit = async function() {
     const userId = document.getElementById('audit-user-select').value;
-    const comments = document.getElementById('audit-comments').value;
-
-    if (Object.keys(auditScores).length < 12) {
-        return alert("⚠️ Por favor, califica los 12 indicadores de desempeño antes de continuar.");
-    }
+    if (Object.keys(auditScores).length < 12) return alert("⚠️ Califica los 12 puntos estratégicos.");
 
     const payload = {
         evaluado_id: parseInt(userId),
-        evaluador_id: currentUser ? currentUser.id : null,
-        comentarios_texto: comments,
-        tipo_evaluacion: "Auditoría Estratégica",
+        evaluador_id: currentUser.id,
+        comentarios_texto: document.getElementById('audit-comments').value,
+        tipo_evaluacion: "Auditoría Web Premium",
         relacion_evaluador: "Administración"
     };
 
-    AUDIT_METRICS.forEach(m => {
-        payload[m.id] = auditScores[m.id] * 20;
-    });
+    AUDIT_METRICS.forEach(m => { payload[m.id] = auditScores[m.id] * 20; });
 
     const res = await apiFetch('/evaluaciones', { method: 'POST', body: JSON.stringify(payload) });
     if (res) {
-        alert("✅ Auditoría publicada exitosamente.");
-        if (typeof toggleAuditPanel === 'function') toggleAuditPanel();
+        alert("✅ Auditoría Publicada");
+        window.toggleAuditPanel();
         renderAuditHistory();
         auditScores = {};
+        document.getElementById('audit-comments').value = "";
     }
 };
 
+// --- MÓDULOS DE VISUALIZACIÓN ---
 async function renderDashboard() {
-    const employees = await apiFetch('/empleados');
+    const emps = await apiFetch('/empleados');
     const table = document.getElementById('employeeTable');
-    if (employees && table) {
-        table.innerHTML = employees.sort((a,b) => b.score - a.score).map(u => `
-            <tr class="hover:bg-slate-50 transition-colors">
+    if (emps && table) {
+        table.innerHTML = emps.sort((a,b) => b.score - a.score).map(u => `
+            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50 cursor-pointer" onclick="updateRadar('radarChartMain', ${u.id}, '${u.nombre}')">
                 <td class="px-8 py-5 font-bold text-slate-700">${u.nombre}</td>
-                <td class="px-8 py-5 text-slate-400 text-[10px] font-bold uppercase tracking-widest">${u.rol}</td>
+                <td class="px-8 py-5 text-slate-400 text-[10px] font-bold uppercase">${u.rol}</td>
                 <td class="px-8 py-5 text-right"><span class="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-black">${u.score}</span></td>
             </tr>
         `).join('');
-        if (employees.length > 0) updateRadar('radarChartMain', employees[0].id, employees[0].nombre);
+        if (emps.length > 0) updateRadar('radarChartMain', emps[0].id, emps[0].nombre);
     }
 }
-
-async function renderTalent() {
-    const employees = await apiFetch('/empleados');
-    const grid = document.getElementById('talentGrid');
-    if (employees && grid) {
-        grid.innerHTML = employees.map(u => `
-            <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center relative group">
-                ${currentUser && currentUser.rol === 'ADMIN' && u.email !== 'admin@insight.com' ? `
-                <button onclick="window.deleteEmployee(${u.id}, '${u.nombre}')" class="absolute top-6 right-6 text-slate-200 hover:text-red-500 transition-colors"><i class="fas fa-trash-alt"></i></button>` : ''}
-                <div class="w-16 h-16 bg-indigo-50 rounded-2xl mx-auto mb-4 flex items-center justify-center text-indigo-600 text-xl font-black ring-4 ring-indigo-50/50">${u.nombre[0]}</div>
-                <h5 class="font-black text-slate-800 text-sm mb-1">${u.nombre}</h5>
-                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-6">${u.rol}</p>
-                <button onclick="downloadReport(${u.id}, '${u.nombre}')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-black transition-all">Ver Perfil</button>
-            </div>
-        `).join('');
-    }
-}
-
-async function renderCompare() {
-    const employees = await apiFetch('/empleados');
-    if (employees) {
-        const options = employees.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
-        document.getElementById('compare-user-1').innerHTML = options;
-        document.getElementById('compare-user-2').innerHTML = options;
-        if (employees.length > 1) document.getElementById('compare-user-2').selectedIndex = 1;
-        window.updateComparison();
-    }
-}
-
-window.updateComparison = async () => {
-    const sel1 = document.getElementById('compare-user-1');
-    const sel2 = document.getElementById('compare-user-2');
-    const id1 = sel1.value;
-    const id2 = sel2.value;
-    const name1 = sel1.options[sel1.selectedIndex].text;
-    const name2 = sel2.options[sel2.selectedIndex].text;
-
-    const d1 = await apiFetch(`/evaluaciones/resumen/${id1}`);
-    const d2 = await apiFetch(`/evaluaciones/resumen/${id2}`);
-    const ctx = document.getElementById('radarChartCompare').getContext('2d');
-    if (compareChart) compareChart.destroy();
-    compareChart = new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: d1.labels,
-            datasets: [
-                { label: name1, data: d1.scores, borderColor: '#6366F1', backgroundColor: 'rgba(99, 102, 241, 0.15)', borderWidth: 3 },
-                { label: name2, data: d2.scores, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.15)', borderWidth: 3 }
-            ]
-        },
-        options: { scales: { r: { min: 0, max: 100 } } }
-    });
-};
 
 async function updateRadar(canvasId, userId, label) {
     const data = await apiFetch(`/evaluaciones/resumen/${userId}`);
+    if (!data) return;
     const ctx = document.getElementById(canvasId).getContext('2d');
     if (mainChart) mainChart.destroy();
     mainChart = new Chart(ctx, {
@@ -228,83 +169,99 @@ async function updateRadar(canvasId, userId, label) {
         },
         options: { scales: { r: { min: 0, max: 100 } } }
     });
+    renderAIInsights(userId);
 }
 
-// --- ACCIONES ---
-window.downloadReport = async (userId, userName) => {
+async function renderAIInsights(userId) {
+    const aiData = await apiFetch(`/ia/analisis/${userId}`);
+    let container = document.getElementById('ai-insights-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'ai-insights-container';
+        document.getElementById('section-dashboard').appendChild(container);
+    }
+    if (aiData) {
+        container.innerHTML = `
+            <div class="mt-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100 shadow-sm col-span-full">
+                <h6 class="text-indigo-900 font-black text-xs uppercase mb-3 flex items-center"><i class="fas fa-robot mr-2"></i> Análisis Insight AI</h6>
+                <p class="text-slate-600 text-xs mb-3">Sentimiento: <b>${aiData.sentimiento}</b></p>
+                <div class="flex flex-wrap gap-2">
+                    ${aiData.recomendaciones.map(r => `<span class="bg-white text-indigo-700 text-[9px] font-bold px-3 py-2 rounded-xl border border-indigo-100">${r}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+}
+
+async function renderTalent() {
+    const emps = await apiFetch('/empleados');
+    if (emps) {
+        document.getElementById('talentGrid').innerHTML = emps.map(u => `
+            <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
+                <div class="w-16 h-16 bg-indigo-50 rounded-2xl mx-auto mb-4 flex items-center justify-center text-indigo-600 text-xl font-black">${u.nombre[0]}</div>
+                <h5 class="font-black text-slate-800 text-sm mb-1">${u.nombre}</h5>
+                <button onclick="downloadReport(${u.id}, '${u.nombre}')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase mt-4">Reporte PDF</button>
+            </div>
+        `).join('');
+    }
+}
+
+async function renderCompare() {
+    const emps = await apiFetch('/empleados');
+    const s1 = document.getElementById('compare-user-1');
+    const s2 = document.getElementById('compare-user-2');
+    if (emps && s1 && s2) {
+        const html = emps.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
+        s1.innerHTML = html; s2.innerHTML = html;
+        if(emps.length > 1) s2.selectedIndex = 1;
+        updateComparison();
+    }
+}
+
+window.updateComparison = async function() {
+    const id1 = document.getElementById('compare-user-1').value;
+    const id2 = document.getElementById('compare-user-2').value;
+    const d1 = await apiFetch(`/evaluaciones/resumen/${id1}`);
+    const d2 = await apiFetch(`/evaluaciones/resumen/${id2}`);
+    const ctx = document.getElementById('radarChartCompare').getContext('2d');
+    if (compareChart) compareChart.destroy();
+    compareChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: d1.labels,
+            datasets: [{ label: 'E1', data: d1.scores, borderColor: '#6366F1', borderWidth: 2 }, { label: 'E2', data: d2.scores, borderColor: '#10B981', borderWidth: 2 }]
+        }
+    });
+}
+
+window.downloadReport = async (id, name) => {
     try {
-        const response = await fetch(`${API_BASE}/reporte/${userId}`);
-        const blob = await response.blob();
+        const res = await fetch(`${API_BASE}/reporte/${id}`);
+        const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `Reporte_${userName.replace(/\s+/g, '_')}.pdf`;
-        document.body.appendChild(a);
+        a.href = url; a.download = `Reporte_${name}.pdf`;
         a.click();
-        a.remove();
-    } catch (e) { alert("Error al generar PDF"); }
-};
-
-window.deleteEmployee = async (id, name) => {
-    if (confirm(`¿Estás seguro de eliminar a ${name}?`)) {
-        await apiFetch(`/usuarios/${id}`, { method: 'DELETE' });
-        renderTalent();
-    }
+    } catch (e) { alert("Error PDF"); }
 };
 
 window.handleLogin = async function() {
-    const email = document.getElementById('login-email').value;
-    const pass = document.getElementById('login-pass').value;
+    const email = document.getElementById('login-email').value.trim();
+    const pass = document.getElementById('login-pass').value.trim();
     const res = await apiFetch('/login', { method: 'POST', body: JSON.stringify({email, password: pass}) });
     if (res && res.user) {
         localStorage.setItem('user', JSON.stringify(res.user));
         location.reload();
-    }
+    } else { alert("Credenciales incorrectas"); }
 };
 
-window.publicRegister = async function() {
-    const nombre = document.getElementById('reg-pub-nombre').value;
-    const email = document.getElementById('reg-pub-email').value;
-    const password = document.getElementById('reg-pub-pass').value;
-    if (!nombre || !email || !password) return alert("Completa los campos.");
-    const res = await apiFetch('/usuarios', { method: 'POST', body: JSON.stringify({ nombre, email, password }) });
-    if (res) alert("✅ Registro iniciado. Revisa tu correo o terminal.");
-};
-
-window.verifyWebAccount = async function() {
-    const emailLogin = document.getElementById('login-email').value;
-    const emailReg = document.getElementById('reg-pub-email').value;
-    const email = (emailReg || emailLogin || "").trim();
-    const codigo = document.getElementById('verify-code').value.trim();
-
-    if (!email) return alert("⚠️ Escribe tu correo en el campo de arriba.");
-    if (!codigo) return alert("⚠️ Escribe el código de verificación.");
-
-    const res = await apiFetch('/verificar', { method: 'POST', body: JSON.stringify({ email, codigo }) });
-    if (res) {
-        alert("✅ Cuenta activada. Procede a ingresar.");
-        if (typeof switchTab === 'function') switchTab('login');
-        document.getElementById('login-email').value = email;
-    }
-};
-
-window.quickLogin = function() {
-    const select = document.getElementById('quick-login-select');
-    const user = allUsers.find(u => u.id == select.value);
-    if (user) { localStorage.setItem('user', JSON.stringify(user)); location.reload(); }
-};
-
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     if (currentUser) {
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('app-content').classList.remove('hidden');
+        document.getElementById('login-screen').style.display = 'none';
+        const app = document.getElementById('app-content');
+        app.classList.remove('hidden'); app.style.display = 'flex';
+        document.body.style.overflow = 'auto';
         document.getElementById('user-role-badge').innerText = currentUser.rol;
-        renderDashboard();
-    } else {
-        const rawUsers = await apiFetch('/empleados');
-        if (rawUsers) {
-            allUsers = rawUsers;
-            document.getElementById('quick-login-select').innerHTML = allUsers.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
-        }
+        window.showSection('dashboard');
     }
 });

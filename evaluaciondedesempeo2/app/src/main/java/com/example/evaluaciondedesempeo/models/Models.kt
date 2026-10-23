@@ -1,16 +1,16 @@
 package com.example.evaluaciondedesempeo.models
 
 data class User(
-    val id: Int,
-    val nombre: String,
-    val rol: String,
+    val id: Int = -1,
+    val nombre: String? = "Usuario",
+    val rol: String? = "EMPLOYEE",
     val email: String? = null,
-    val alerta: Boolean = false
+    val score: Float? = 0f
 )
 
 data class LoginResponse(
-    val access_token: String? = null, // Hecho opcional por si el backend no lo envía
-    val user: User
+    val access_token: String? = null,
+    val user: User? = null
 )
 
 data class EvaluationRequest(
@@ -18,8 +18,6 @@ data class EvaluationRequest(
     val evaluador_id: Int,
     val tipo_evaluacion: String,
     val relacion_evaluador: String,
-    
-    // Las 12 métricas (0-100)
     val obj_cumplimiento: Float,
     val puntualidad_asistencia: Float,
     val calidad_trabajo: Float,
@@ -32,38 +30,22 @@ data class EvaluationRequest(
     val responsabilidad: Float,
     val actitud_profesional: Float,
     val desarrollo_profesional: Float,
-    
     val comentarios_texto: String
 )
 
 data class EvaluationResponse(
     val status: String? = null,
-    val evaluacion_id: Int? = null,
-    val puntuacion: Float? = null,
-    val alerta_critica: Boolean = false,
-    // Compatibilidad con versión previa
-    val id: Int? = null,
-    val evaluado_id: Int? = null,
-    val puntuacion_promedio: Float? = null,
-    val comentarios_texto: String? = null,
-    val fecha: String? = null
-)
-
-data class AnalysisRequest(
-    val feedback: String,
-    val score: Float
-)
-
-data class AnalysisResult(
-    val sentimiento: String,
-    val areas_oportunidad: List<String>,
-    val recomendaciones: List<String>,
-    val score_analisis: Float
+    val message: String? = null
 )
 
 data class Summary360(
-    val labels: List<String>,
-    val scores: List<Float>,
-    val kpis: Map<String, Float>? = null,
+    val labels: List<String>? = emptyList(),
+    val scores: List<Float>? = emptyList(),
+    val kpis: Map<String, Float>? = emptyMap(),
     val analisis_ia: AnalysisResult? = null
+)
+
+data class AnalysisResult(
+    val sentimiento: String? = "Neutral",
+    val recomendaciones: List<String>? = emptyList()
 )

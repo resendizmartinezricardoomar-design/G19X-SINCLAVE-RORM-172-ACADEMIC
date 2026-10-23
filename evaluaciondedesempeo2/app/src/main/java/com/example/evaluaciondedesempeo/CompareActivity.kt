@@ -11,7 +11,6 @@ import com.example.evaluaciondedesempeo.api.ApiClient
 import com.example.evaluaciondedesempeo.databinding.ActivityCompareBinding
 import com.example.evaluaciondedesempeo.models.Summary360
 import com.example.evaluaciondedesempeo.models.User
-import com.github.mikephil.charting.charts.RadarChart
 import com.github.mikephil.charting.data.RadarData
 import com.github.mikephil.charting.data.RadarDataSet
 import com.github.mikephil.charting.data.RadarEntry
@@ -49,9 +48,10 @@ class CompareActivity : AppCompatActivity() {
     private fun loadEmployees() {
         ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
+                if (isFinishing || isDestroyed) return
                 if (response.isSuccessful) {
                     employeeList = response.body() ?: emptyList()
-                    val names = employeeList.map { it.nombre }
+                    val names = employeeList.map { it.nombre ?: "Sin nombre" }
                     val adapter = ArrayAdapter(this@CompareActivity, android.R.layout.simple_spinner_item, names)
                     adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                     binding.spinnerUserA.adapter = adapter
@@ -59,6 +59,7 @@ class CompareActivity : AppCompatActivity() {
                 }
             }
             override fun onFailure(call: Call<List<User>>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
                 Toast.makeText(this@CompareActivity, "Error de conexión", Toast.LENGTH_SHORT).show()
             }
         })
@@ -81,6 +82,7 @@ class CompareActivity : AppCompatActivity() {
     private fun fetchData(userId: Int, isUserA: Boolean) {
         ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
+                if (isFinishing || isDestroyed) return
                 if (response.isSuccessful) {
                     if (isUserA) summaryA = response.body()
                     else summaryB = response.body()
@@ -95,10 +97,19 @@ class CompareActivity : AppCompatActivity() {
         val sA = summaryA ?: return
         val sB = summaryB ?: return
 
-        val entriesA = sA.scores.map { RadarEntry(it) }
-        val entriesB = sB.scores.map { RadarEntry(it) }
+        // Corrección: Uso de ?.map y elvis operator para asegurar que no sean nulos
+        val scoresA = sA.scores ?: emptyList()
+        val scoresB = sB.scores ?: emptyList()
+        
+        val entriesA = scoresA.map { RadarEntry(it) }
+        val entriesB = scoresB.map { RadarEntry(it) }
 
-        val dataSetA = RadarDataSet(entriesA, employeeList[binding.spinnerUserA.selectedItemPosition].nombre)
+        if (entriesA.isEmpty() || entriesB.isEmpty()) return
+
+        val nameA = employeeList.getOrNull(binding.spinnerUserA.selectedItemPosition)?.nombre ?: "A"
+        val nameB = employeeList.getOrNull(binding.spinnerUserB.selectedItemPosition)?.nombre ?: "B"
+
+        val dataSetA = RadarDataSet(entriesA, nameA)
         dataSetA.apply {
             color = Color.parseColor("#6366F1")
             fillColor = Color.parseColor("#6366F1")
@@ -107,7 +118,7 @@ class CompareActivity : AppCompatActivity() {
             lineWidth = 3f
         }
 
-        val dataSetB = RadarDataSet(entriesB, employeeList[binding.spinnerUserB.selectedItemPosition].nombre)
+        val dataSetB = RadarDataSet(entriesB, nameB)
         dataSetB.apply {
             color = Color.parseColor("#10B981")
             fillColor = Color.parseColor("#10B981")
@@ -119,7 +130,8 @@ class CompareActivity : AppCompatActivity() {
         binding.radarChartCompare.apply {
             data = RadarData(dataSetA, dataSetB)
             description.isEnabled = false
-            xAxis.valueFormatter = IndexAxisValueFormatter(sA.labels)
+            // Corrección: Manejo de labels nulos
+            xAxis.valueFormatter = IndexAxisValueFormatter(sA.labels ?: emptyList())
             xAxis.textColor = Color.parseColor("#64748B")
             xAxis.textSize = 10f
             

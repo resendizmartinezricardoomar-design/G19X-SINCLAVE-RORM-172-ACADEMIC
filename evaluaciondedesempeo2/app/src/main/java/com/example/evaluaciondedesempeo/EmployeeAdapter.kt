@@ -1,6 +1,5 @@
 package com.example.evaluaciondedesempeo
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -25,10 +24,12 @@ class EmployeeAdapter(
 
     override fun onBindViewHolder(holder: EmployeeViewHolder, position: Int) {
         val employee = employees[position]
-        holder.binding.tvEmployeeName.text = employee.nombre
-        holder.binding.tvEmployeeRole.text = employee.rol
         
-        // Bloqueo de botones de gestión en la lista si no es ADMIN
+        // Uso de valores por defecto para evitar NullPointerException
+        holder.binding.tvEmployeeName.text = employee.nombre ?: "Usuario sin nombre"
+        holder.binding.tvEmployeeRole.text = employee.rol ?: "Puesto no asignado"
+        
+        // Gestión de visibilidad según rol de Administrador
         if (isAdmin) {
             holder.binding.btnEvaluate.visibility = View.VISIBLE
             holder.binding.btnDeleteEmployee.visibility = View.VISIBLE

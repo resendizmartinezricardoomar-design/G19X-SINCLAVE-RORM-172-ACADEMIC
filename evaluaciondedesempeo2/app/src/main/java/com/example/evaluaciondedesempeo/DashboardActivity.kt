@@ -3,6 +3,7 @@ package com.example.evaluaciondedesempeo
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -110,7 +111,10 @@ class DashboardActivity : AppCompatActivity() {
             .setMessage("¿Eliminar a ${u.nombre}?")
             .setPositiveButton("SÍ") { _, _ ->
                 ApiClient.apiService.deleteEmployee(u.id).enqueue(object : Callback<Void> {
-                    override fun onResponse(call: Call<Void>, response: Response<Void>) { loadEmployees() }
+                    override fun onResponse(call: Call<Void>, response: Response<Void>) { 
+                        if (isFinishing || isDestroyed) return
+                        loadEmployees() 
+                    }
                     override fun onFailure(call: Call<Void>, t: Throwable) {}
                 })
             }.setNegativeButton("NO", null).show()
@@ -119,9 +123,12 @@ class DashboardActivity : AppCompatActivity() {
     private fun loadEmployees() {
         ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
+                if (isFinishing || isDestroyed) return
                 if (response.isSuccessful) {
                     val list = response.body() ?: emptyList()
-                    (binding.rvEmployees.adapter as? EmployeeAdapter)?.updateData(list.filter { it.id != userId })
+                    // Filtro de seguridad para evitar nulos
+                    val filtered = list.filter { it.id != userId && it.nombre != null }
+                    (binding.rvEmployees.adapter as? EmployeeAdapter)?.updateData(filtered)
                 }
             }
             override fun onFailure(call: Call<List<User>>, t: Throwable) {}
@@ -129,18 +136,30 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun loadMySummary() {
+        if (userId == -1) return
         ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
-                if (response.isSuccessful) {
-                    response.body()?.let {
-                        val avg = if (it.scores.isNotEmpty()) it.scores.average() else 0.0
+                if (isFinishing || isDestroyed) return
+                if (response.isSuccessful && response.body() != null) {
+                    val summary = response.body()!!
+                    try {
+                        // Verificación de lista de scores para evitar nulos y promediar con seguridad
+                        val scores = summary.scores?.filterNotNull() ?: emptyList()
+                        val avg = if (scores.isNotEmpty()) scores.average() else 0.0
+                        
                         binding.tvKpiScore.text = String.format("%.1f", avg)
-                        binding.tvKpiEvals.text = "${it.scores.count { it > 0 }}"
-                        binding.tvKpiAlerts.text = if (avg < 60 && it.scores.isNotEmpty()) "01" else "00"
+                        binding.tvKpiEvals.text = "${scores.size}"
+                        binding.tvKpiAlerts.text = if (avg < 60 && scores.isNotEmpty()) "01" else "00"
+                    } catch (e: Exception) {
+                        Log.e("DASHBOARD", "Error en KPIs", e)
+                        binding.tvKpiScore.text = "0.0"
+                        binding.tvKpiEvals.text = "0"
                     }
                 }
             }
-            override fun onFailure(call: Call<Summary360>, t: Throwable) {}
+            override fun onFailure(call: Call<Summary360>, t: Throwable) {
+                // Falla silenciosa para evitar crash por red
+            }
         })
     }
 
