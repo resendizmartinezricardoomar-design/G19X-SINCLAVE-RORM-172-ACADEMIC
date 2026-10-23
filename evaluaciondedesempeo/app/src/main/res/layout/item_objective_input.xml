@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/text_objective_desc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Descripción del Objetivo"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/text_percentage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cumplimiento: 0%" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/slider_objective"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:valueFrom="0.0"
+            android:valueTo="100.0"
+            android:stepSize="5.0"
+            android:value="0.0" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
