@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import uvicorn, random, logging, io, datetime, json, urllib.request
+from ai_engine import ai_engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -161,6 +162,14 @@ async def download_report(usuario_id: int, db: Session = Depends(get_db)):
     output.write(reporte.encode('utf-8'))
     output.seek(0)
     return StreamingResponse(output, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Reporte_{u.id}.pdf"})
+
+@app.get("/api/ia/analisis/{uid}")
+def obtener_analisis_ia(uid: int, db: Session = Depends(get_db)):
+    last_ev = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).order_by(Evaluacion.fecha.desc()).first()
+    if not last_ev:
+        return {"sentimiento": "Sin datos", "recomendaciones": ["Realizar primera evaluación"]}
+    analisis = ai_engine.analizar_comentarios(last_ev.comentarios_texto or "Buen desempeño general", last_ev.puntuacion_promedio)
+    return analisis
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
