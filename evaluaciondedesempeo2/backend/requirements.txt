@@ -2,7 +2,9 @@ fastapi
 uvicorn
 sqlalchemy
 pydantic
+email-validator
 passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
 fpdf2
+python-dotenv
