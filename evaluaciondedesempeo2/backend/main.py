@@ -19,7 +19,6 @@ from fpdf import FPDF
 SECRET_KEY = os.getenv("SECRET_KEY", "insight_super_secret_key_9988")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
-# Cambiado a pbkdf2_sha256 para evitar errores de compatibilidad con bcrypt en Python 3.14
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
@@ -190,6 +189,16 @@ async def eliminar_u(user_id: int, db: Session = Depends(get_db), current_user: 
     return {"status": "ok"}
 
 # --- RUTAS DE EVALUACIÓN ---
+
+@app.get("/api/evaluaciones")
+def listar_evaluaciones(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    evs = db.query(Evaluacion).order_by(Evaluacion.fecha.desc()).all()
+    return [{
+        "fecha": e.fecha.strftime("%Y-%m-%d") if e.fecha else "",
+        "evaluado_id": e.evaluado_id,
+        "evaluado_nombre": e.evaluado.nombre if e.evaluado else "Desconocido",
+        "puntuacion_promedio": e.puntuacion_promedio
+    } for e in evs]
 
 @app.post("/api/evaluaciones")
 async def crear_ev(data: dict = Body(...), db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
