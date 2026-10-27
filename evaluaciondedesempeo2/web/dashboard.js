@@ -1,11 +1,10 @@
 /**
- * InsightHR Unified Dashboard Engine - v1000.20.0
- * Seguridad Mejorada: Se eliminó el acceso rápido inseguro.
+ * InsightHR Unified Dashboard Engine - v1000.20.1
  */
 
 const API_BASE = "http://localhost:8000/api";
 let currentUser = JSON.parse(localStorage.getItem('user')) || null;
-let authToken = localStorage.getItem('token') || null; // Token para peticiones protegidas
+let authToken = localStorage.getItem('token') || null;
 let mainChart = null;
 let compareChart = null;
 let auditScores = {};
@@ -23,39 +22,68 @@ async function apiFetch(endpoint, options = {}) {
     try {
         if (!options.headers) options.headers = {};
         if (options.body) options.headers['Content-Type'] = 'application/json';
-
-        // Incluir token si existe
-        if (authToken) {
-            options.headers['Authorization'] = `Bearer ${authToken}`;
-        }
+        if (authToken) options.headers['Authorization'] = `Bearer ${authToken}`;
 
         const response = await fetch(`${API_BASE}${endpoint}`, options);
-        if (response.status === 401) {
-            handleLogout();
-            return null;
-        }
+        if (response.status === 401) { handleLogout(); return null; }
         if (!response.ok) return null;
         return await response.json();
     } catch (e) { return null; }
 }
 
-// --- NAVEGACIÓN ---
+window.handleLogin = async function() {
+    const email = document.getElementById('login-email').value.trim();
+    const pass = document.getElementById('login-pass').value.trim();
+    const res = await apiFetch('/login', { method: 'POST', body: JSON.stringify({email, password: pass}) });
+    if (res && res.user && res.access_token) {
+        localStorage.setItem('user', JSON.stringify(res.user));
+        localStorage.setItem('token', res.access_token);
+        location.reload();
+    } else { alert("Credenciales incorrectas o cuenta no activa"); }
+};
+
+window.publicRegister = async function() {
+    const nombre = document.getElementById('reg-pub-nombre').value.trim();
+    const email = document.getElementById('reg-pub-email').value.trim();
+    const password = document.getElementById('reg-pub-pass').value.trim();
+    if (!nombre || !email || !password) return alert("⚠️ Completa todos los campos");
+    const res = await apiFetch('/usuarios', { method: 'POST', body: JSON.stringify({ nombre, email, password }) });
+    if (res && res.status === "success") {
+        alert("✅ Registro exitoso. Valida tu cuenta con el código.");
+        window.switchTab('login');
+        document.getElementById('login-email').value = email;
+    } else { alert("❌ Error: El correo ya existe."); }
+};
+
+window.verifyWebAccount = async function() {
+    const email = document.getElementById('login-email').value.trim();
+    const code = document.getElementById('verify-code').value.trim();
+    const res = await apiFetch('/verificar', { method: 'POST', body: JSON.stringify({ email, codigo: code }) });
+    if (res && res.status === "verified") {
+        alert("✅ ¡Cuenta validada!");
+        document.getElementById('verify-box').classList.add('hidden');
+    } else { alert("❌ Código incorrecto."); }
+};
+
+window.handleLogout = function() {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    location.reload();
+};
+
 window.showSection = function(sectionId, btnElement) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.add('hidden'));
     const section = document.getElementById(`section-${sectionId}`);
     if (section) section.classList.remove('hidden');
-
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     if (btnElement) btnElement.classList.add('active');
 
     const titles = { 'dashboard': 'Dashboard General', 'talent': 'Gestión de Talento', 'compare': 'Comparativa Estratégica', 'evaluations': 'Historial de Auditorías' };
     if (titles[sectionId]) document.getElementById('page-title').innerText = titles[sectionId];
 
+    const isAdmin = currentUser && currentUser.rol && currentUser.rol.toUpperCase() === 'ADMIN';
     const btnNew = document.getElementById('btn-show-audit');
-    if (btnNew) {
-        const isAdmin = currentUser && currentUser.rol && currentUser.rol.toUpperCase() === 'ADMIN';
-        btnNew.style.display = (isAdmin && sectionId === 'evaluations') ? 'block' : 'none';
-    }
+    if (btnNew) btnNew.style.display = (isAdmin && sectionId === 'evaluations') ? 'block' : 'none';
 
     if (sectionId === 'dashboard') renderDashboard();
     if (sectionId === 'talent') renderTalent();
@@ -63,20 +91,58 @@ window.showSection = function(sectionId, btnElement) {
     if (sectionId === 'evaluations') renderAuditHistory();
 };
 
-// --- MÓDULO AUDITORÍAS ---
+async function renderTalent() {
+    const emps = await apiFetch('/empleados');
+    if (emps) {
+        // IMPORTANTE: Si acabas de cambiar el rol, debes cerrar sesión y volver a entrar
+        const user = JSON.parse(localStorage.getItem('user'));
+        const isAdmin = user && user.rol && user.rol.toUpperCase() === 'ADMIN';
+
+        console.log("InsightHR Debug: isAdmin =", isAdmin);
+
+        document.getElementById('talentGrid').innerHTML = emps.map(u => {
+            const safeName = (u.nombre || 'Colaborador').replace(/'/g, "\\'");
+            return `
+                <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center relative group animate-in">
+                    ${isAdmin ? `
+                        <button onclick="deleteWorker(${u.id}, '${safeName}')"
+                                class="absolute top-5 right-5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white w-9 h-9 rounded-xl flex items-center justify-center transition-all z-20 border border-red-100 shadow-sm">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>` : ''}
+                    <div class="w-16 h-16 bg-indigo-50 rounded-2xl mx-auto mb-4 flex items-center justify-center text-indigo-600 text-xl font-black">
+                        ${u.nombre ? u.nombre[0] : '?'}
+                    </div>
+                    <h5 class="font-black text-slate-800 text-sm mb-1">${u.nombre || 'Sin nombre'}</h5>
+                    <p class="text-[9px] text-slate-400 font-bold uppercase mb-4">${u.rol || 'EMPLOYEE'}</p>
+                    <button onclick="downloadReport(${u.id}, '${safeName}')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase">Reporte PDF</button>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+window.deleteWorker = async function(id, name) {
+    if (confirm(`¿Estás seguro de eliminar a ${name}? Esta acción es permanente.`)) {
+        const res = await apiFetch(`/usuarios/${id}`, { method: 'DELETE' });
+        if (res) {
+            alert("✅ Colaborador eliminado");
+            renderTalent();
+            renderDashboard();
+        } else {
+            alert("❌ Error al eliminar. Verifica tus permisos.");
+        }
+    }
+};
+
 async function renderAuditHistory() {
     const table = document.getElementById('historyTable');
     if (!table) return;
-
     if (currentUser && currentUser.rol.toUpperCase() === 'ADMIN') {
         const emps = await apiFetch('/empleados');
         const select = document.getElementById('audit-user-select');
-        if (select && emps) {
-            select.innerHTML = emps.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
-        }
+        if (select && emps) select.innerHTML = emps.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('');
         renderAuditQuestions();
     }
-
     const evals = await apiFetch('/evaluaciones');
     if (evals) {
         table.innerHTML = evals.map(e => `
@@ -85,7 +151,7 @@ async function renderAuditHistory() {
                 <td class="px-8 py-4 font-black text-slate-700">${e.evaluado_nombre}</td>
                 <td class="px-8 py-4 text-center"><span class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-black">${e.puntuacion_promedio}</span></td>
                 <td class="px-8 py-4 text-right">
-                    <button onclick="downloadReport(${e.evaluado_id}, '${e.evaluado_nombre}')" class="text-blue-600 font-black uppercase text-[10px] hover:underline">Descargar PDF</button>
+                    <button onclick="downloadReport(${e.evaluado_id}, '${e.evaluado_nombre}')" class="text-blue-600 font-black uppercase text-[10px] hover:underline">PDF</button>
                 </td>
             </tr>
         `).join('');
@@ -120,21 +186,18 @@ window.toggleAuditPanel = function() {
 
 window.submitPremiumAudit = async function() {
     const userId = document.getElementById('audit-user-select').value;
-    if (Object.keys(auditScores).length < 12) return alert("⚠️ Califica los 12 puntos estratégicos.");
-
+    if (Object.keys(auditScores).length < 12) return alert("⚠️ Califica todos los puntos.");
     const payload = {
         evaluado_id: parseInt(userId),
         evaluador_id: currentUser.id,
         comentarios_texto: document.getElementById('audit-comments').value,
-        tipo_evaluacion: "Auditoría Web Premium",
+        tipo_evaluacion: "Auditoría Web",
         relacion_evaluador: "Administración"
     };
-
     AUDIT_METRICS.forEach(m => { payload[m.id] = auditScores[m.id] * 20; });
-
     const res = await apiFetch('/evaluaciones', { method: 'POST', body: JSON.stringify(payload) });
     if (res) {
-        alert("✅ Auditoría Publicada Exitosamente");
+        alert("✅ Auditoría Publicada");
         window.toggleAuditPanel();
         renderAuditHistory();
         auditScores = {};
@@ -142,7 +205,6 @@ window.submitPremiumAudit = async function() {
     }
 };
 
-// --- DASHBOARD E IA ---
 async function renderDashboard() {
     const emps = await apiFetch('/empleados');
     const table = document.getElementById('employeeTable');
@@ -161,7 +223,6 @@ async function renderDashboard() {
 async function updateRadar(canvasId, userId, label) {
     const data = await apiFetch(`/evaluaciones/resumen/${userId}`);
     if (!data) return;
-
     const ctx = document.getElementById(canvasId).getContext('2d');
     if (mainChart) mainChart.destroy();
     mainChart = new Chart(ctx, {
@@ -172,7 +233,6 @@ async function updateRadar(canvasId, userId, label) {
         },
         options: { scales: { r: { min: 0, max: 100 } } }
     });
-
     if (data.analisis_ia) renderAIInsights(data.analisis_ia);
 }
 
@@ -185,26 +245,11 @@ function renderAIInsights(aiData) {
     }
     container.innerHTML = `
         <div class="mt-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100 shadow-sm col-span-full">
-            <h6 class="text-indigo-900 font-black text-xs uppercase mb-3 flex items-center"><i class="fas fa-robot mr-2"></i> Análisis Insight AI</h6>
+            <h6 class="text-indigo-900 font-black text-xs uppercase mb-3 flex items-center"><i class="fas fa-robot mr-2"></i> IA Insight</h6>
             <p class="text-slate-600 text-xs mb-3">Sentimiento: <b>${aiData.sentimiento}</b></p>
-            <div class="flex flex-wrap gap-2">
-                ${aiData.recomendaciones.map(r => `<span class="bg-white text-indigo-700 text-[9px] font-bold px-3 py-2 rounded-xl border border-indigo-100">${r}</span>`).join('')}
-            </div>
+            <div class="flex flex-wrap gap-2">${aiData.recomendaciones.map(r => `<span class="bg-white text-indigo-700 text-[9px] font-bold px-3 py-2 rounded-xl border border-indigo-100">${r}</span>`).join('')}</div>
         </div>
     `;
-}
-
-async function renderTalent() {
-    const emps = await apiFetch('/empleados');
-    if (emps) {
-        document.getElementById('talentGrid').innerHTML = emps.map(u => `
-            <div class="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 text-center">
-                <div class="w-16 h-16 bg-indigo-50 rounded-2xl mx-auto mb-4 flex items-center justify-center text-indigo-600 text-xl font-black">${u.nombre ? u.nombre[0] : '?'}</div>
-                <h5 class="font-black text-slate-800 text-sm mb-1">${u.nombre || 'Sin nombre'}</h5>
-                <button onclick="downloadReport(${u.id}, '${u.nombre}')" class="w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase mt-4">Reporte PDF</button>
-            </div>
-        `).join('');
-    }
 }
 
 async function renderCompare() {
@@ -238,35 +283,14 @@ window.updateComparison = async function() {
 
 window.downloadReport = async (id, name) => {
     try {
-        const response = await fetch(`${API_BASE}/reporte/${id}`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
+        const response = await fetch(`${API_BASE}/reporte/${id}`, { headers: { 'Authorization': `Bearer ${authToken}` } });
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Reporte_InsightHR_${name.replace(/\s+/g, '_')}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        a.download = `Reporte_${name.replace(/\s+/g, '_')}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
     } catch (e) { alert("Error al generar PDF"); }
-};
-
-window.handleLogin = async function() {
-    const email = document.getElementById('login-email').value.trim();
-    const pass = document.getElementById('login-pass').value.trim();
-    const res = await apiFetch('/login', { method: 'POST', body: JSON.stringify({email, password: pass}) });
-    if (res && res.user && res.access_token) {
-        localStorage.setItem('user', JSON.stringify(res.user));
-        localStorage.setItem('token', res.access_token);
-        location.reload();
-    } else { alert("Credenciales incorrectas o cuenta no activa"); }
-};
-
-window.handleLogout = function() {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    location.reload();
 };
 
 document.addEventListener('DOMContentLoaded', () => {

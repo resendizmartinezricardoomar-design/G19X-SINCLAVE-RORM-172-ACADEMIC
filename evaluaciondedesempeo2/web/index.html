@@ -29,7 +29,6 @@
         .tab-active { color: #6366F1; border-color: #6366F1; }
         .tab-inactive { color: #94A3B8; border-color: transparent; }
 
-        /* Estilo Encuesta de Auditoría */
         .audit-card { background: white; border: 1px solid #F1F5F9; border-radius: 20px; padding: 24px; transition: all 0.3s; margin-bottom: 16px; text-align: left; }
         .audit-card:hover { border-color: #6366F1; box-shadow: 0 10px 25px rgba(99, 102, 241, 0.05); }
         .rating-box { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
@@ -56,41 +55,35 @@
                 <button onclick="switchTab('login')" id="btn-login-tab" class="tab-btn tab-active flex-1">Acceso</button>
                 <button onclick="switchTab('register')" id="btn-reg-tab" class="tab-btn tab-inactive flex-1">Registro</button>
             </div>
+
             <div id="login-form" class="space-y-4">
                 <input type="email" id="login-email" placeholder="Correo electrónico">
                 <input type="password" id="login-pass" placeholder="Contraseña">
                 <button onclick="window.handleLogin()" class="btn-primary w-full py-4 rounded-xl text-xs uppercase mt-2 shadow-lg shadow-indigo-100">Entrar al Sistema</button>
             </div>
+
             <div id="register-form" class="space-y-4 hidden">
                 <input type="text" id="reg-pub-nombre" placeholder="Nombre completo">
                 <input type="email" id="reg-pub-email" placeholder="Email corporativo">
                 <input type="password" id="reg-pub-pass" placeholder="Crear contraseña">
                 <button onclick="window.publicRegister()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs uppercase transition-all">Crear Perfil</button>
             </div>
-            <div class="mt-10 pt-6 border-t border-slate-50 space-y-6">
-                <div>
-                    <button onclick="document.getElementById('verify-box').classList.toggle('hidden')" class="w-full flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
-                        <span>¿Posees un código de activación?</span><i class="fas fa-chevron-down text-[8px]"></i>
-                    </button>
-                    <div id="verify-box" class="hidden mt-4 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50">
-                        <div class="flex gap-2">
-                            <input type="text" id="verify-code" placeholder="000000" class="text-center font-mono font-bold text-lg tracking-[0.2em] !py-2 flex-1">
-                            <button onclick="window.verifyWebAccount()" class="px-5 bg-blue-600 text-white font-bold rounded-xl text-[10px] uppercase shadow-lg shadow-blue-100">Validar</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-6 text-center">
-                    <button onclick="document.getElementById('sim-box').classList.toggle('hidden')" class="text-[9px] font-bold text-slate-200 uppercase hover:text-slate-400 transition-colors">Modo Desarrollador</button>
-                    <div id="sim-box" class="hidden mt-3 p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                        <select id="quick-login-select" class="!py-2 text-[11px] mb-2"></select>
-                        <button onclick="window.quickLogin()" class="w-full py-2 bg-slate-200 text-slate-600 font-bold rounded-lg text-[9px] uppercase">Acceso Rápido</button>
+
+            <div class="mt-10 pt-6 border-t border-slate-50">
+                <button onclick="document.getElementById('verify-box').classList.toggle('hidden')" class="w-full flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                    <span>¿Posees un código de activación?</span><i class="fas fa-chevron-down text-[8px]"></i>
+                </button>
+                <div id="verify-box" class="hidden mt-4 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50">
+                    <div class="flex gap-2">
+                        <input type="text" id="verify-code" placeholder="000000" class="text-center font-mono font-bold text-lg tracking-[0.2em] !py-2 flex-1">
+                        <button onclick="window.verifyWebAccount()" class="px-5 bg-blue-600 text-white font-bold rounded-xl text-[10px] uppercase shadow-lg shadow-blue-100">Validar</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MAIN APP CONTENT (DASHBOARD) -->
+    <!-- MAIN APP CONTENT -->
     <div id="app-content" class="flex h-screen w-full hidden">
         <aside class="w-64 bg-[#0F172A] flex flex-col shrink-0 z-30 shadow-2xl">
             <div class="p-8 flex items-center gap-3">
@@ -104,7 +97,7 @@
                 <button onclick="showSection('evaluations', this)" class="nav-btn flex items-center gap-4"><i class="fas fa-shield-alt w-5 text-center"></i> Auditorías</button>
             </nav>
             <div class="p-6 border-t border-slate-800">
-                <button onclick="localStorage.clear(); location.reload();" class="w-full py-3 bg-red-500/10 text-red-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Cerrar Sesión</button>
+                <button onclick="window.handleLogout()" class="w-full py-3 bg-red-500/10 text-red-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Cerrar Sesión</button>
             </div>
         </aside>
 
@@ -118,8 +111,6 @@
             </header>
 
             <div id="scroll-area" class="flex-1 overflow-y-auto p-10 space-y-10">
-
-                <!-- DASHBOARD -->
                 <div id="section-dashboard" class="page-section grid grid-cols-1 lg:grid-cols-2 gap-10">
                     <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 flex items-center justify-center"><canvas id="radarChartMain"></canvas></div>
                     <div class="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden text-left">
@@ -127,23 +118,18 @@
                         <table class="w-full text-left"><tbody id="employeeTable"></tbody></table>
                     </div>
                 </div>
-
                 <div id="section-talent" class="page-section hidden"><div id="talentGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div></div>
-
                 <div id="section-compare" class="page-section hidden">
                     <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 text-center">
                         <div class="grid grid-cols-2 gap-6 mb-10"><select id="compare-user-1" onchange="window.updateComparison()"></select><select id="compare-user-2" onchange="window.updateComparison()"></select></div>
                         <div class="max-w-sm mx-auto"><canvas id="radarChartCompare"></canvas></div>
                     </div>
                 </div>
-
-                <!-- AUDITORÍAS -->
                 <div id="section-evaluations" class="page-section hidden space-y-8 text-center">
                     <div class="flex justify-between items-end mb-4">
                         <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">Historial de Auditorías</h3>
                         <button id="btn-show-audit" onclick="toggleAuditPanel()" class="hidden bg-blue-600 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-blue-100 transition-all hover:bg-indigo-700">Nueva Evaluación</button>
                     </div>
-
                     <div class="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden text-left">
                         <table class="w-full text-left">
                             <thead class="bg-slate-50 text-[9px] font-black uppercase text-slate-400 border-b border-slate-100">
@@ -152,30 +138,25 @@
                             <tbody id="historyTable" class="divide-y divide-slate-50"></tbody>
                         </table>
                     </div>
-
-                    <!-- PANEL NUEVA AUDITORÍA (ADMIN) -->
                     <div id="audit-form-panel" class="hidden text-left space-y-8 animate-in">
                         <div class="bg-white rounded-[2.5rem] p-10 shadow-xl border border-blue-50">
                             <div class="flex justify-between items-start mb-8">
                                 <div>
-                                    <h3 class="text-xl font-black text-slate-800 tracking-tight">Evaluación Estratégica (12 Puntos)</h3>
-                                    <p class="text-[11px] text-slate-400 font-bold uppercase mt-1">Califica del 1 (Bajo) al 5 (Excelente)</p>
+                                    <h3 class="text-xl font-black text-slate-800 tracking-tight">Evaluación Estratégica</h3>
+                                    <p class="text-[11px] text-slate-400 font-bold uppercase mt-1">Califica del 1 al 5</p>
                                 </div>
                                 <button onclick="toggleAuditPanel()" class="text-slate-300 hover:text-red-500 transition-colors"><i class="fas fa-times-circle text-2xl"></i></button>
                             </div>
-
-                            <!-- Aquí se cargan las 12 preguntas por JS -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-1" id="audit-questions-grid"></div>
-
                             <div class="mt-10 pt-8 border-t border-slate-100">
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                                     <div>
-                                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Colaborador a Evaluar</label>
+                                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Colaborador</label>
                                         <select id="audit-user-select" class="font-bold border-2 border-blue-50 shadow-sm"></select>
                                     </div>
                                     <div>
-                                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Observaciones Finales</label>
-                                        <textarea id="audit-comments" placeholder="feedback ejecutivo..."></textarea>
+                                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Observaciones</label>
+                                        <textarea id="audit-comments" placeholder="feedback..."></textarea>
                                     </div>
                                 </div>
                                 <button onclick="window.submitPremiumAudit()" class="w-full py-5 bg-[#6366F1] text-white font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-xl hover:bg-indigo-700">Publicar Auditoría</button>

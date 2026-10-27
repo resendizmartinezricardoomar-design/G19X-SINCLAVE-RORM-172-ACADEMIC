@@ -7,7 +7,6 @@ import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.evaluaciondedesempeo.api.ApiClient
 import com.example.evaluaciondedesempeo.databinding.ActivityCompareBinding
@@ -28,16 +27,12 @@ class CompareActivity : AppCompatActivity() {
     private var employeeList: List<User> = emptyList()
     private var summaryA: Summary360? = null
     private var summaryB: Summary360? = null
-    private var authToken: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
             _binding = ActivityCompareBinding.inflate(layoutInflater)
             setContentView(binding.root)
-
-            val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
-            authToken = prefs.getString("AUTH_TOKEN", "") ?: ""
 
             loadEmployees()
 
@@ -53,24 +48,25 @@ class CompareActivity : AppCompatActivity() {
             binding.spinnerUserA.onItemSelectedListener = listener
             binding.spinnerUserB.onItemSelectedListener = listener
         } catch (e: Exception) {
-            Log.e("INSIGHT_FATAL", "Error en CompareActivity", e)
+            Log.e("INSIGHT_ERROR", "Error en CompareActivity", e)
             finish()
         }
     }
 
     private fun loadEmployees() {
-        if (authToken.isEmpty()) return
-        val tokenHeader = "Bearer $authToken"
-        ApiClient.apiService.getEmployees(tokenHeader).enqueue(object : Callback<List<User>> {
+        // El token se añade automáticamente mediante el Interceptor de ApiClient
+        ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
                 if (isFinishing || isDestroyed || _binding == null) return
                 if (response.isSuccessful) {
                     employeeList = response.body()?.filter { it.nombre != null } ?: emptyList()
-                    val names = employeeList.map { it.nombre!! }
-                    val adapter = ArrayAdapter(this@CompareActivity, android.R.layout.simple_spinner_item, names)
-                    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                    binding.spinnerUserA.adapter = adapter
-                    binding.spinnerUserB.adapter = adapter
+                    if (employeeList.isNotEmpty()) {
+                        val names = employeeList.map { it.nombre!! }
+                        val adapter = ArrayAdapter(this@CompareActivity, android.R.layout.simple_spinner_item, names)
+                        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                        binding.spinnerUserA.adapter = adapter
+                        binding.spinnerUserB.adapter = adapter
+                    }
                 }
             }
             override fun onFailure(call: Call<List<User>>, t: Throwable) {}
@@ -82,7 +78,7 @@ class CompareActivity : AppCompatActivity() {
             val posA = binding.spinnerUserA.selectedItemPosition
             val posB = binding.spinnerUserB.selectedItemPosition
 
-            if (employeeList.isEmpty() || posA < 0 || posB < 0 || posA >= employeeList.size || posB >= employeeList.size) return
+            if (employeeList.isEmpty() || posA < 0 || posB < 0) return
             if (posA == posB) return
 
             fetchData(employeeList[posA].id, true)
@@ -93,8 +89,7 @@ class CompareActivity : AppCompatActivity() {
     }
 
     private fun fetchData(userId: Int, isUserA: Boolean) {
-        val tokenHeader = "Bearer $authToken"
-        ApiClient.apiService.getSummary360(tokenHeader, userId).enqueue(object : Callback<Summary360> {
+        ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
                 if (isFinishing || isDestroyed || _binding == null) return
                 if (response.isSuccessful && response.body() != null) {
@@ -111,40 +106,36 @@ class CompareActivity : AppCompatActivity() {
         try {
             val sA = summaryA ?: return
             val sB = summaryB ?: return
-            
             if (_binding == null) return
 
             val scoresA = sA.scores?.filterNotNull() ?: emptyList()
             val scoresB = sB.scores?.filterNotNull() ?: emptyList()
             
-            if (scoresA.isEmpty() || scoresB.isEmpty()) return
+            if (scoresA.size < 3 || scoresB.size < 3) return
 
             val entriesA = scoresA.map { RadarEntry(it) }
             val entriesB = scoresB.map { RadarEntry(it) }
 
             val dataSetA = RadarDataSet(entriesA, "Colaborador A").apply {
-                color = Color.parseColor("#6366F1")
+                color = Color.parseColor("#4F46E5")
                 setDrawFilled(true)
-                fillAlpha = 40
-                lineWidth = 3f
+                fillAlpha = 50
+                lineWidth = 2f
             }
 
             val dataSetB = RadarDataSet(entriesB, "Colaborador B").apply {
                 color = Color.parseColor("#10B981")
                 setDrawFilled(true)
-                fillAlpha = 40
-                lineWidth = 3f
+                fillAlpha = 50
+                lineWidth = 2f
             }
 
             binding.radarChartCompare.apply {
                 data = RadarData(dataSetA, dataSetB)
                 description.isEnabled = false
                 xAxis.valueFormatter = IndexAxisValueFormatter(sA.labels ?: emptyList())
-                xAxis.textColor = Color.parseColor("#94A3B8")
                 yAxis.axisMinimum = 0f
                 yAxis.axisMaximum = 100f
-                yAxis.setDrawLabels(false)
-                animateXY(800, 800)
                 invalidate()
             }
         } catch (e: Exception) {

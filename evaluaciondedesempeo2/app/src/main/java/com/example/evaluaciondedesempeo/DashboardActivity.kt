@@ -23,7 +23,6 @@ class DashboardActivity : AppCompatActivity() {
     
     private var userId: Int = -1
     private var userRole: String = ""
-    private var authToken: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,7 +33,6 @@ class DashboardActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
             userId = intent.getIntExtra("USER_ID", prefs.getInt("USER_ID", -1))
             userRole = intent.getStringExtra("USER_ROLE") ?: prefs.getString("USER_ROLE", "EMPLOYEE") ?: "EMPLOYEE"
-            authToken = prefs.getString("TOKEN", "") ?: "" // Usar "TOKEN" según rúbrica
             val userName = intent.getStringExtra("USER_NAME") ?: prefs.getString("USER_NAME", "Usuario") ?: "Usuario"
 
             binding.tvUserName.text = "Hola, $userName"
@@ -60,24 +58,15 @@ class DashboardActivity : AppCompatActivity() {
             }
 
             binding.btnLogout.setOnClickListener {
-                handleLogout()
+                getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE).edit().clear().apply()
+                val loginIntent = Intent(this, LoginActivity::class.java)
+                loginIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(loginIntent)
+                finish()
             }
         } catch (e: Exception) {
             Log.e("INSIGHT_FATAL", "Error en Dashboard", e)
         }
-    }
-
-    private fun handleUnauthorized() {
-        Toast.makeText(this, "Sesión expirada", Toast.LENGTH_SHORT).show()
-        handleLogout()
-    }
-
-    private fun handleLogout() {
-        getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE).edit().clear().apply()
-        val loginIntent = Intent(this, LoginActivity::class.java)
-        loginIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(loginIntent)
-        finish()
     }
 
     private fun setupUIByRole() {
@@ -116,11 +105,11 @@ class DashboardActivity : AppCompatActivity() {
     private fun confirmDelete(u: User) {
         AlertDialog.Builder(this)
             .setTitle("Confirmar")
-            .setMessage("¿Eliminar a ${u.nombre}?")
+            .setMessage("¿Deseas eliminar a ${u.nombre}?")
             .setPositiveButton("SÍ") { _, _ ->
-                ApiClient.apiService.deleteEmployee("Bearer $authToken", u.id).enqueue(object : Callback<Void> {
+                // El token ya se envía automáticamente por el Interceptor
+                ApiClient.apiService.deleteEmployee(u.id).enqueue(object : Callback<Void> {
                     override fun onResponse(call: Call<Void>, response: Response<Void>) {
-                        if (response.code() == 401) handleUnauthorized()
                         if (response.isSuccessful) loadEmployees()
                     }
                     override fun onFailure(call: Call<Void>, t: Throwable) {}
@@ -129,10 +118,10 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun loadEmployees() {
-        ApiClient.apiService.getEmployees("Bearer $authToken").enqueue(object : Callback<List<User>> {
+        // Petición limpia sin parámetros manuales de Token
+        ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
                 if (isFinishing || isDestroyed || _binding == null) return
-                if (response.code() == 401) handleUnauthorized()
                 if (response.isSuccessful) {
                     val list = response.body() ?: emptyList()
                     val filtered = list.filter { it.id != userId && it.nombre != null }
@@ -145,10 +134,9 @@ class DashboardActivity : AppCompatActivity() {
 
     private fun loadMySummary() {
         if (userId == -1) return
-        ApiClient.apiService.getSummary360("Bearer $authToken", userId).enqueue(object : Callback<Summary360> {
+        ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
                 if (isFinishing || isDestroyed || _binding == null) return
-                if (response.code() == 401) handleUnauthorized()
                 if (response.isSuccessful && response.body() != null) {
                     val summary = response.body()!!
                     try {

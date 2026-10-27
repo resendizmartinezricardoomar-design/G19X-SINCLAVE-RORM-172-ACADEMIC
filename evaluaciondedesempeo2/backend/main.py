@@ -11,15 +11,18 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
+from dotenv import load_dotenv
 import uvicorn, random, logging, io, json, urllib.request
 from ai_engine import ai_engine
 from fpdf import FPDF
+
+# Cargar variables de entorno si existen
+load_dotenv()
 
 # Configuración de Seguridad
 SECRET_KEY = os.getenv("SECRET_KEY", "insight_super_secret_key_9988")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
-# Cambiado a pbkdf2_sha256 para evitar errores de compatibilidad con bcrypt en Python 3.14
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
@@ -28,11 +31,11 @@ logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 
-# --- CONFIGURACIÓN EMAILJS (Solo desde variables de entorno para seguridad) ---
-EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID")
-EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID")
-EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY")
-EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY")
+# --- CONFIGURACIÓN EMAILJS ---
+EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID", "service_rm6zifg")
+EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID", "template_j7y4f2o")
+EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY", "Coo1K1QyCwKASIl5B")
+EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY", "409pIDJDDB6qjIKSi93gB")
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -60,27 +63,36 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 def enviar_correo_emailjs(email_destino, codigo):
-    if not all([EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY]):
-        logger.error("EmailJS no está configurado correctamente en las variables de entorno.")
-        # En desarrollo, imprimimos el código en consola si no hay EmailJS
-        print(f"📧 CÓDIGO PARA {email_destino}: {codigo}")
-        return False
-
     url = "https://api.emailjs.com/api/v1.0/email/send"
     data = {
         "service_id": EMAILJS_SERVICE_ID,
         "template_id": EMAILJS_TEMPLATE_ID,
         "user_id": EMAILJS_PUBLIC_KEY,
         "accessToken": EMAILJS_PRIVATE_KEY,
-        "template_params": {"to_email": email_destino, "codigo": codigo}
+        "template_params": {
+            "to_email": email_destino,
+            "codigo": codigo
+        }
     }
     try:
         payload = json.dumps(data).encode('utf-8')
-        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            return response.status == 200
+        req = urllib.request.Request(url, data=payload, headers={
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0'
+        })
+        # Aumentamos el timeout para evitar cortes
+        with urllib.request.urlopen(req, timeout=20) as response:
+            res_body = response.read().decode('utf-8')
+            if response.status == 200:
+                logger.info(f"✅ EmailJS OK: {res_body}")
+                return True
+            else:
+                logger.error(f"❌ EmailJS Error {response.status}: {res_body}")
+                return False
     except Exception as e:
-        logger.error(f"Error enviando correo: {e}")
+        logger.error(f"❌ Fallo crítico al enviar correo: {str(e)}")
+        # Siempre mostramos el código en consola como plan B
+        print(f"\n🔑 [CÓDIGO GENERADO] Para {email_destino}: {codigo}\n")
         return False
 
 # --- ACTUALIZACIÓN DE SEGURIDAD PARA EL ADMIN ---
@@ -97,12 +109,8 @@ def create_default_admin():
             db.add(new_admin); db.commit()
             print("\n⭐ ADMIN CREADO CON ÉXITO\n")
         else:
-            # Si el admin existe, nos aseguramos de que esté activo
             if not admin.is_active:
-                admin.is_active = True
-                db.commit()
-
-            # Si la contraseña no está en el nuevo formato (pbkdf2), la actualizamos
+                admin.is_active = True; db.commit()
             if not str(admin.hashed_password).startswith("$pbkdf2-sha256$"):
                 admin.hashed_password = pwd_context.hash("admin123")
                 db.commit()
@@ -173,7 +181,6 @@ async def registrar_u(req: UserCreate, db: Session = Depends(get_db)):
 
     codigo_v = str(random.randint(100000, 999999))
     hashed = pwd_context.hash(req.password)
-    # Siempre registramos como EMPLOYEE por seguridad
     u = Usuario(nombre=req.nombre.strip(), email=email_clean, hashed_password=hashed, rol="EMPLOYEE", is_active=False, verification_code=codigo_v)
     db.add(u); db.commit()
     enviar_correo_emailjs(email_clean, codigo_v)
@@ -225,8 +232,6 @@ def listar_evaluaciones(db: Session = Depends(get_db), current_user: Usuario = D
 async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     valores = data.model_dump()
     db_ev = Evaluacion(**valores, evaluador_id=current_user.id)
-
-    # Lista de los 12 indicadores para calcular el promedio
     indicadores = [
         data.obj_cumplimiento, data.puntualidad_asistencia, data.calidad_trabajo,
         data.productividad, data.trabajo_equipo, data.conocimiento_habilidad,
@@ -234,7 +239,6 @@ async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), curren
         data.responsabilidad, data.actitud_profesional, data.desarrollo_profesional
     ]
     db_ev.puntuacion_promedio = round(sum(indicadores) / len(indicadores), 1)
-
     db.add(db_ev); db.commit()
     return {"status": "ok"}
 
@@ -243,22 +247,18 @@ def resumen(uid: int, db: Session = Depends(get_db), current_user: Usuario = Dep
     metrics = ["obj_cumplimiento", "puntualidad_asistencia", "calidad_trabajo", "productividad", "trabajo_equipo", "conocimiento_habilidad", "comunicacion", "adaptabilidad", "iniciativa", "responsabilidad", "actitud_profesional", "desarrollo_profesional"]
     labels = ["Obj", "Punt", "Calid", "Prod", "Equip", "Skill", "Comu", "Adap", "Inic", "Resp", "Actit", "Desa"]
     scores = []
-
     for m in metrics:
         val = db.query(func.avg(getattr(Evaluacion, m))).filter(Evaluacion.evaluado_id == uid).scalar()
         scores.append(round(float(val or 0.0), 1))
-
     last_ev = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).order_by(Evaluacion.fecha.desc()).first()
     analisis_ia = None
     if last_ev:
         analisis_ia = ai_engine.analizar_comentarios(last_ev.comentarios_texto or "Sin comentarios", last_ev.puntuacion_promedio or 0.0)
-
     kpis = {
         "Eficiencia Operativa": round(sum(scores[0:4]) / 4, 1) if scores else 0.0,
         "Competencias Blandas": round(sum(scores[4:8]) / 4, 1) if scores else 0.0,
         "Potencial y Crecimiento": round(sum(scores[8:12]) / 4, 1) if scores else 0.0
     }
-
     return {"labels": labels, "scores": scores, "analisis_ia": analisis_ia, "kpis": kpis}
 
 @app.get("/api/reporte/{usuario_id}")
@@ -266,7 +266,6 @@ async def download_report(usuario_id: int, db: Session = Depends(get_db), curren
     u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not u: raise HTTPException(status_code=404)
     avg = db.query(func.avg(Evaluacion.puntuacion_promedio)).filter(Evaluacion.evaluado_id == u.id).scalar() or 0.0
-
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
@@ -278,7 +277,6 @@ async def download_report(usuario_id: int, db: Session = Depends(get_db), curren
     pdf.ln(10)
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(190, 15, f"SCORE GLOBAL: {round(float(avg), 1)} / 100", ln=True, fill=True)
-
     pdf_content = pdf.output(dest='S')
     output = io.BytesIO(pdf_content)
     return StreamingResponse(output, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Reporte_InsightHR_{u.id}.pdf"})
