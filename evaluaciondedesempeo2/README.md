@@ -1,30 +1,30 @@
-# InsightHR - Sistema de Evaluación de Desempeño 360°
+# InsightHR - Executive Performance Suite
 
-## 📝 Descripción
-InsightHR es una plataforma integral para la gestión y auditoría del capital humano. Permite realizar evaluaciones de desempeño basadas en 12 ejes estratégicos, visualizando los resultados mediante gráficos de radar dinámicos.
+Sistema integral de evaluación de desempeño 360° con análisis de Inteligencia Artificial, diseñado para la gestión estratégica de talento humano.
 
-## 🏗️ Arquitectura
-*   **App Android (Kotlin):** Interfaz para supervisores y administradores para realizar auditorías en tiempo real.
-*   **Backend (Python/FastAPI o Flask):** API REST que gestiona la lógica de negocio, base de datos y procesamiento de IA.
-*   **Panel Web (JS/Dashboard):** Visualización analítica de KPIs y generación de reportes PDF.
+## 🚀 Características Principales
+- **Dashboard Estratégico:** Visualización de métricas en tiempo real.
+- **Análisis Insight AI:** Generación de recomendaciones y sentimiento basados en comentarios mediante procesamiento de lenguaje natural.
+- **Seguridad Industrial:** Hashing de contraseñas y autenticación mediante Tokens JWT.
+- **Reportes Ejecutivos:** Generación automatizada de PDFs con resultados detallados.
 
-## 🚀 Configuración del Backend
-1. Navegar a la carpeta: `cd evaluaciondedesempeo2/backend`
-2. Instalar dependencias: `pip install -r requirements.txt`
-3. Configurar variables de entorno: Crear un archivo `.env` basado en `.env.example`.
-4. Iniciar servidor: `python main.py`
+## 🛠️ Tecnologías Utilizadas
+- **Android:** Kotlin, Retrofit2, MPAndroidChart.
+- **Backend:** FastAPI (Python), SQLAlchemy, JWT.
+- **IA:** Motor de análisis semántico integrado (`ai_engine.py`).
+- **Base de Datos:** SQLite.
 
-## 📱 Configuración de la App Android
-*   Abrir `app/src/main/java/com/example/evaluaciondedesempeo/api/ApiClient.kt`.
-*   Cambiar la constante `BASE_URL` por la IP local de tu computadora (ejemplo: `http://192.168.1.XX:8000/api/`).
+## 🔐 Seguridad
+Las llaves de servicios externos (EmailJS) y secretos de JWT se gestionan mediante variables de entorno en el archivo `.env`. Consulte `.env.example` para la configuración.
 
-## 🌐 Panel Web
-*   Abrir el archivo `web/index.html` en cualquier navegador moderno.
-*   Asegurarse de que el backend esté corriendo para visualizar los datos reales.
+---
 
-## 🛠️ Tecnologías
-*   Android SDK (Kotlin)
-*   Python 3.x
-*   SQLite / SQLAlchemy
-*   Chart.js (Visualización)
-*   Retrofit 2 (Networking)
+### 🤖 Declaración de Uso de IA
+Este proyecto fue desarrollado con el apoyo de modelos de Inteligencia Artificial para:
+- La lógica del motor de análisis de sentimientos en `ai_engine.py`.
+- La estructuración de las cabeceras de seguridad JWT.
+- La generación de plantillas para los reportes estratégicos en PDF.
+- Optimización de consultas SQL y refactorización de código en Android.
+
+---
+© 2026 InsightHR Business Suite - Confidencial.

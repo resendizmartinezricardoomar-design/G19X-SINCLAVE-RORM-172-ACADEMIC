@@ -1,10 +1,10 @@
 package com.example.evaluaciondedesempeo
 
+import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
-import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -19,6 +19,7 @@ import retrofit2.Response
 class EvaluationActivity : AppCompatActivity() {
     private lateinit var binding: ActivityEvaluationBinding
     private var userId: Int = -1
+    private var authToken: String = ""
     private var employeeList: List<User> = emptyList()
     
     private val selectedScores = mutableMapOf<String, Int>()
@@ -40,16 +41,23 @@ class EvaluationActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityEvaluationBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        try {
+            binding = ActivityEvaluationBinding.inflate(layoutInflater)
+            setContentView(binding.root)
 
-        userId = intent.getIntExtra("USER_ID", -1)
+            val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
+            userId = intent.getIntExtra("USER_ID", prefs.getInt("USER_ID", -1))
+            authToken = prefs.getString("AUTH_TOKEN", "") ?: ""
 
-        setupQuestions()
-        loadEmployees()
+            setupQuestions()
+            loadEmployees()
 
-        binding.btnSubmit.setOnClickListener {
-            submitEvaluation()
+            binding.btnSubmit.setOnClickListener {
+                submitEvaluation()
+            }
+        } catch (e: Exception) {
+            Log.e("INSIGHT_ERROR", "Error al iniciar Evaluación", e)
+            finish()
         }
     }
 
@@ -69,7 +77,7 @@ class EvaluationActivity : AppCompatActivity() {
                         b.setBackgroundColor(Color.WHITE)
                         b.setTextColor(Color.parseColor("#64748B"))
                     }
-                    button.setBackgroundColor(Color.parseColor("#1E3A8A"))
+                    button.setBackgroundColor(Color.parseColor("#4F46E5"))
                     button.setTextColor(Color.WHITE)
                 }
             }
@@ -78,80 +86,75 @@ class EvaluationActivity : AppCompatActivity() {
     }
 
     private fun loadEmployees() {
-        ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
+        if (authToken.isEmpty()) return
+        val tokenHeader = "Bearer $authToken"
+        ApiClient.apiService.getEmployees(tokenHeader).enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
+                if (isFinishing || isDestroyed) return
                 if (response.isSuccessful) {
                     employeeList = (response.body() ?: emptyList()).filter { it.id != userId }
-                    if (employeeList.isEmpty()) {
-                        Toast.makeText(this@EvaluationActivity, "No hay empleados registrados para evaluar", Toast.LENGTH_LONG).show()
-                    }
-                    val names = employeeList.map { it.nombre }
+                    val names = employeeList.map { it.nombre ?: "Sin nombre" }
                     val adapter = ArrayAdapter(this@EvaluationActivity, android.R.layout.simple_spinner_item, names)
                     adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                     binding.spinnerEmpleado.adapter = adapter
                 }
             }
-            override fun onFailure(call: Call<List<User>>, t: Throwable) {
-                Toast.makeText(this@EvaluationActivity, "Error al conectar con el servidor", Toast.LENGTH_SHORT).show()
-            }
+            override fun onFailure(call: Call<List<User>>, t: Throwable) {}
         })
     }
 
     private fun submitEvaluation() {
-        // VALIDACIÓN 1: Selección de empleado
         if (employeeList.isEmpty() || binding.spinnerEmpleado.selectedItemPosition == -1) {
-            Toast.makeText(this, "❌ Error: Primero selecciona a un colaborador", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Selecciona a un colaborador", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // VALIDACIÓN 2: Los 12 puntos
         if (selectedScores.size < 12) {
-            val faltantes = 12 - selectedScores.size
-            Toast.makeText(this, "⚠️ Faltan $faltantes indicadores por calificar", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Faltan indicadores por calificar", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val evaluadoId = employeeList[binding.spinnerEmpleado.selectedItemPosition].id
-        
-        val request = EvaluationRequest(
-            evaluado_id = evaluadoId,
-            evaluador_id = userId,
-            tipo_evaluacion = "Auditoría Móvil Premium",
-            relacion_evaluador = "Administración",
-            obj_cumplimiento = selectedScores["obj_cumplimiento"]!!.toFloat() * 20,
-            puntualidad_asistencia = selectedScores["puntualidad_asistencia"]!!.toFloat() * 20,
-            calidad_trabajo = selectedScores["calidad_trabajo"]!!.toFloat() * 20,
-            productividad = selectedScores["productividad"]!!.toFloat() * 20,
-            trabajo_equipo = selectedScores["trabajo_equipo"]!!.toFloat() * 20,
-            conocimiento_habilidad = selectedScores["conocimiento_habilidad"]!!.toFloat() * 20,
-            comunicacion = selectedScores["comunicacion"]!!.toFloat() * 20,
-            adaptabilidad = selectedScores["adaptabilidad"]!!.toFloat() * 20,
-            iniciativa = selectedScores["iniciativa"]!!.toFloat() * 20,
-            responsabilidad = selectedScores["responsabilidad"]!!.toFloat() * 20,
-            actitud_profesional = selectedScores["actitud_profesional"]!!.toFloat() * 20,
-            desarrollo_profesional = selectedScores["desarrollo_profesional"]!!.toFloat() * 20,
-            comentarios_texto = binding.etComments.text.toString()
-        )
+        try {
+            val evaluadoId = employeeList[binding.spinnerEmpleado.selectedItemPosition].id
+            
+            val request = EvaluationRequest(
+                evaluado_id = evaluadoId,
+                evaluador_id = userId,
+                tipo_evaluacion = "Auditoría Premium",
+                relacion_evaluador = "Administración",
+                obj_cumplimiento = (selectedScores["obj_cumplimiento"] ?: 0).toFloat() * 20,
+                puntualidad_asistencia = (selectedScores["puntualidad_asistencia"] ?: 0).toFloat() * 20,
+                calidad_trabajo = (selectedScores["calidad_trabajo"] ?: 0).toFloat() * 20,
+                productividad = (selectedScores["productividad"] ?: 0).toFloat() * 20,
+                trabajo_equipo = (selectedScores["trabajo_equipo"] ?: 0).toFloat() * 20,
+                conocimiento_habilidad = (selectedScores["conocimiento_habilidad"] ?: 0).toFloat() * 20,
+                comunicacion = (selectedScores["comunicacion"] ?: 0).toFloat() * 20,
+                adaptabilidad = (selectedScores["adaptabilidad"] ?: 0).toFloat() * 20,
+                iniciativa = (selectedScores["iniciativa"] ?: 0).toFloat() * 20,
+                responsabilidad = (selectedScores["responsabilidad"] ?: 0).toFloat() * 20,
+                actitud_profesional = (selectedScores["actitud_profesional"] ?: 0).toFloat() * 20,
+                desarrollo_profesional = (selectedScores["desarrollo_profesional"] ?: 0).toFloat() * 20,
+                comentarios_texto = binding.etComments.text.toString()
+            )
 
-        binding.btnSubmit.isEnabled = false
-        binding.btnSubmit.text = "PUBLICANDO..."
-
-        ApiClient.apiService.createEvaluation(request).enqueue(object : Callback<EvaluationResponse> {
-            override fun onResponse(call: Call<EvaluationResponse>, response: Response<EvaluationResponse>) {
-                if (response.isSuccessful) {
-                    Toast.makeText(this@EvaluationActivity, "✅ AUDITORÍA PUBLICADA", Toast.LENGTH_SHORT).show()
-                    finish()
-                } else {
-                    binding.btnSubmit.isEnabled = true
-                    binding.btnSubmit.text = "PUBLICAR AUDITORÍA"
-                    Toast.makeText(this@EvaluationActivity, "Error del servidor: ${response.code()}", Toast.LENGTH_SHORT).show()
+            binding.btnSubmit.isEnabled = false
+            val tokenHeader = "Bearer $authToken"
+            ApiClient.apiService.createEvaluation(tokenHeader, request).enqueue(object : Callback<EvaluationResponse> {
+                override fun onResponse(call: Call<EvaluationResponse>, response: Response<EvaluationResponse>) {
+                    if (isFinishing || isDestroyed) return
+                    if (response.isSuccessful) {
+                        Toast.makeText(this@EvaluationActivity, "✅ AUDITORÍA PUBLICADA", Toast.LENGTH_SHORT).show()
+                        finish()
+                    } else {
+                        binding.btnSubmit.isEnabled = true
+                    }
                 }
-            }
-            override fun onFailure(call: Call<EvaluationResponse>, t: Throwable) {
-                binding.btnSubmit.isEnabled = true
-                binding.btnSubmit.text = "PUBLICAR AUDITORÍA"
-                Toast.makeText(this@EvaluationActivity, "Fallo de red: Verifique su conexión", Toast.LENGTH_SHORT).show()
-            }
-        })
+                override fun onFailure(call: Call<EvaluationResponse>, t: Throwable) {
+                    binding.btnSubmit.isEnabled = true
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("INSIGHT_ERROR", "Error al enviar evaluación", e)
+        }
     }
 }

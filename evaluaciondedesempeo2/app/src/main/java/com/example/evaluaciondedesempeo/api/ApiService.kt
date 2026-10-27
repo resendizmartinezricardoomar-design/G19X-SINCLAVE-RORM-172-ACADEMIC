@@ -16,20 +16,32 @@ interface ApiService {
     fun verificarCuenta(@Body request: VerifyRequest): Call<VerificationResponse>
 
     @GET("api/empleados")
-    fun getEmployees(): Call<List<User>>
+    fun getEmployees(@Header("Authorization") token: String): Call<List<User>>
     
     @DELETE("api/usuarios/{user_id}")
-    fun deleteEmployee(@Path("user_id") userId: Int): Call<Void>
+    fun deleteEmployee(
+        @Header("Authorization") token: String,
+        @Path("user_id") userId: Int
+    ): Call<Void>
 
     @POST("api/evaluaciones")
-    fun createEvaluation(@Body evaluation: EvaluationRequest): Call<EvaluationResponse>
+    fun createEvaluation(
+        @Header("Authorization") token: String,
+        @Body evaluation: EvaluationRequest
+    ): Call<EvaluationResponse>
 
     @GET("api/evaluaciones/resumen/{usuario_id}")
-    fun getSummary360(@Path("usuario_id") userId: Int): Call<Summary360>
+    fun getSummary360(
+        @Header("Authorization") token: String,
+        @Path("usuario_id") userId: Int
+    ): Call<Summary360>
 
     @GET("api/reporte/{usuario_id}")
     @Streaming
-    fun downloadReport(@Path("usuario_id") userId: Int): Call<ResponseBody>
+    fun downloadReport(
+        @Header("Authorization") token: String,
+        @Path("usuario_id") userId: Int
+    ): Call<ResponseBody>
 }
 
 data class LoginRequest(val email: String, val password: String)

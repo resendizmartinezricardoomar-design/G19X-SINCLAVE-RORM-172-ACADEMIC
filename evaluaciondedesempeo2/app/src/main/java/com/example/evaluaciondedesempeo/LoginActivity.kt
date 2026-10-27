@@ -3,10 +3,6 @@ package com.example.evaluaciondedesempeo
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
-import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -23,14 +19,14 @@ import retrofit2.Response
 
 class LoginActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLoginBinding
-    private var selectedUser: User? = null
-    private var allUsers: List<User> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         super.onCreate(savedInstanceState)
 
-        // Inicializar binding inmediatamente para evitar UninitializedPropertyAccessException
+        // Inicializar ApiClient con el contexto para que pueda leer SharedPreferences
+        ApiClient.init(this)
+
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -58,7 +54,6 @@ class LoginActivity : AppCompatActivity() {
             }
         }
 
-        // --- LÓGICA DE VERIFICACIÓN AÑADIDA ---
         binding.btnVerifyAccount.setOnClickListener {
             val email = binding.etEmail.text.toString().trim()
             val code = binding.etVerifyCode.text.toString().trim()
@@ -66,23 +61,6 @@ class LoginActivity : AppCompatActivity() {
                 verifyAccount(email, code)
             } else {
                 Toast.makeText(this, "Ingresa email y código", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        loadUsersForQuickLogin()
-
-        binding.btnQuickEntry.setOnClickListener {
-            selectedUser?.let { user ->
-                performLogin(user.email ?: user.nombre ?: "", "12345")
-            }
-        }
-        
-        // Mostrar herramientas de dev si se toca el texto 5 veces
-        var clickCount = 0
-        binding.tvDevMode.setOnClickListener {
-            clickCount++
-            if (clickCount >= 5) {
-                binding.llDevTools.visibility = View.VISIBLE
             }
         }
     }
@@ -104,37 +82,6 @@ class LoginActivity : AppCompatActivity() {
         })
     }
 
-    private fun loadUsersForQuickLogin() {
-        ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
-            override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
-                if (isFinishing || isDestroyed) return
-                if (response.isSuccessful) {
-                    val rawList = response.body() ?: emptyList()
-                    allUsers = rawList.filter { 
-                        val role = it.rol?.uppercase() ?: ""
-                        val email = it.email?.lowercase() ?: ""
-                        role != "ADMIN" && email != "admin@insight.com"
-                    }
-                    
-                    val displayNames = allUsers.map { "${it.nombre} (${it.rol})" }
-                    val adapter = ArrayAdapter(this@LoginActivity, android.R.layout.simple_spinner_item, displayNames)
-                    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                    binding.spinnerQuickLogin.adapter = adapter
-                    
-                    binding.spinnerQuickLogin.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                        override fun onItemSelected(p0: AdapterView<*>?, p1: View?, pos: Int, p3: Long) {
-                            if (pos < allUsers.size) selectedUser = allUsers[pos]
-                        }
-                        override fun onNothingSelected(p0: AdapterView<*>?) {}
-                    }
-                }
-            }
-            override fun onFailure(call: Call<List<User>>, t: Throwable) {
-                Log.e("API", "Fallo al cargar empleados")
-            }
-        })
-    }
-
     private fun performLogin(email: String, pass: String) {
         binding.btnLogin.isEnabled = false
         ApiClient.apiService.login(LoginRequest(email, pass)).enqueue(object : Callback<LoginResponse> {
@@ -142,12 +89,14 @@ class LoginActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return
                 binding.btnLogin.isEnabled = true
                 if (response.isSuccessful) {
-                    response.body()?.user?.let { user ->
-                        saveSession(user)
+                    val loginResponse = response.body()
+                    loginResponse?.user?.let { user ->
+                        // Guardar sesión incluyendo el access_token bajo la clave "TOKEN"
+                        saveSession(user, loginResponse.access_token ?: "")
                         navigateToDashboard(user.id, user.nombre ?: "Usuario", user.rol ?: "EMPLOYEE")
                     }
                 } else {
-                    Toast.makeText(this@LoginActivity, "Error de acceso", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@LoginActivity, "Error de acceso: Credenciales inválidas", Toast.LENGTH_SHORT).show()
                 }
             }
             override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
@@ -158,11 +107,12 @@ class LoginActivity : AppCompatActivity() {
         })
     }
 
-    private fun saveSession(user: User) {
+    private fun saveSession(user: User, token: String) {
         getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE).edit().apply {
             putInt("USER_ID", user.id)
             putString("USER_NAME", user.nombre)
             putString("USER_ROLE", user.rol)
+            putString("TOKEN", token) // Cambiado de "AUTH_TOKEN" a "TOKEN" según rúbrica
             apply()
         }
     }

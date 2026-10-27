@@ -1,12 +1,14 @@
 package com.example.evaluaciondedesempeo
 
 import android.content.ContentValues
+import android.content.Context
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -30,60 +32,80 @@ class ResultsActivity : AppCompatActivity() {
     private lateinit var binding: ActivityResultsBinding
     private var currentUserId: Int = -1
     private var currentEmployeeName: String = "Colaborador"
+    private var authToken: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityResultsBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        try {
+            binding = ActivityResultsBinding.inflate(layoutInflater)
+            setContentView(binding.root)
 
-        currentUserId = intent.getIntExtra("USER_ID", -1)
-        currentEmployeeName = intent.getStringExtra("USER_NAME") ?: "Colaborador"
+            val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
+            authToken = prefs.getString("AUTH_TOKEN", "") ?: ""
+            
+            currentUserId = intent.getIntExtra("USER_ID", -1)
+            currentEmployeeName = intent.getStringExtra("USER_NAME") ?: "Colaborador"
 
-        binding.tvEmployeeName.text = currentEmployeeName
-        loadRadarData(currentUserId)
+            binding.tvEmployeeName.text = currentEmployeeName
+            loadRadarData(currentUserId)
 
-        binding.btnClose.setOnClickListener { finish() }
-        binding.btnDownloadReport.setOnClickListener { downloadPdfReport(currentUserId) }
+            binding.btnClose.setOnClickListener { finish() }
+            binding.btnDownloadReport.setOnClickListener { downloadPdfReport(currentUserId) }
+        } catch (e: Exception) {
+            Log.e("RESULTS", "Error en onCreate", e)
+            Toast.makeText(this, "Error al cargar resultados", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun loadRadarData(userId: Int) {
-        ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
+        if (authToken.isEmpty()) return
+        val tokenHeader = "Bearer $authToken"
+        ApiClient.apiService.getSummary360(tokenHeader, userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
+                if (isFinishing || isDestroyed) return
                 if (response.isSuccessful && response.body() != null) {
                     val summary = response.body()!!
-                    setupRadarChart(summary.labels ?: emptyList(), summary.scores ?: emptyList())
+                    setupRadarChart(summary.labels ?: emptyList(), summary.scores?.filterNotNull() ?: emptyList())
                     displayKPIs(summary.kpis)
                     displayAIAnalysis(summary)
                 }
             }
             override fun onFailure(call: Call<Summary360>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
                 Toast.makeText(this@ResultsActivity, "Fallo de conexión", Toast.LENGTH_SHORT).show()
             }
         })
     }
 
     private fun setupRadarChart(labels: List<String>, scores: List<Float>) {
-        if (labels.isEmpty() || scores.isEmpty()) {
-            binding.radarChart.visibility = View.GONE
-            return
-        }
-        binding.radarChart.visibility = View.VISIBLE
-        val entries = scores.map { RadarEntry(it) }
-        val dataSet = RadarDataSet(entries, "Desempeño Actual")
-        dataSet.color = Color.parseColor("#6366F1")
-        dataSet.setDrawFilled(true)
-        dataSet.fillAlpha = 70
-        dataSet.lineWidth = 2f
+        try {
+            if (labels.isEmpty() || scores.isEmpty()) {
+                binding.cardRadar.visibility = View.GONE
+                return
+            }
+            binding.cardRadar.visibility = View.VISIBLE
+            val entries = scores.map { RadarEntry(it) }
+            val dataSet = RadarDataSet(entries, "Desempeño Actual").apply {
+                color = Color.parseColor("#6366F1")
+                setDrawFilled(true)
+                fillAlpha = 70
+                lineWidth = 2f
+            }
 
-        binding.radarChart.apply {
-            data = RadarData(dataSet)
-            xAxis.valueFormatter = IndexAxisValueFormatter(labels)
-            yAxis.axisMinimum = 0f
-            yAxis.axisMaximum = 100f
-            description.isEnabled = false
-            legend.isEnabled = false
-            animateXY(800, 800)
-            invalidate()
+            binding.radarChart.apply {
+                data = RadarData(dataSet)
+                xAxis.valueFormatter = IndexAxisValueFormatter(labels)
+                xAxis.textColor = Color.parseColor("#94A3B8")
+                yAxis.axisMinimum = 0f
+                yAxis.axisMaximum = 100f
+                yAxis.setDrawLabels(false)
+                description.isEnabled = false
+                legend.isEnabled = false
+                animateXY(800, 800)
+                invalidate()
+            }
+        } catch (e: Exception) {
+            Log.e("CHART", "Error al configurar radar", e)
         }
     }
 
@@ -109,9 +131,9 @@ class ResultsActivity : AppCompatActivity() {
             binding.tvSentiment.text = "Sentimiento: ${it.sentimiento ?: "Neutral"}"
             val recs = it.recomendaciones ?: emptyList()
             binding.tvRecommendations.text = if (recs.isNotEmpty()) {
-                "Recomendaciones IA:\n" + recs.joinToString("\n• ", prefix = "• ")
+                "RECOMENDACIONES ESTRATÉGICAS:\n" + recs.joinToString("\n• ", prefix = "• ")
             } else {
-                "Sigue con tu buen desempeño."
+                "Continúe con la ruta de desempeño establecida."
             }
             binding.cardIA.visibility = View.VISIBLE
         } ?: run {
@@ -121,8 +143,10 @@ class ResultsActivity : AppCompatActivity() {
 
     private fun downloadPdfReport(userId: Int) {
         binding.btnDownloadReport.isEnabled = false
-        ApiClient.apiService.downloadReport(userId).enqueue(object : Callback<ResponseBody> {
+        val tokenHeader = "Bearer $authToken"
+        ApiClient.apiService.downloadReport(tokenHeader, userId).enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                if (isFinishing || isDestroyed) return
                 if (response.isSuccessful && response.body() != null) {
                     savePdfToDownloads(response.body()!!)
                     Toast.makeText(this@ResultsActivity, "✅ PDF Descargado", Toast.LENGTH_SHORT).show()
@@ -130,6 +154,7 @@ class ResultsActivity : AppCompatActivity() {
                 binding.btnDownloadReport.isEnabled = true
             }
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
                 binding.btnDownloadReport.isEnabled = true
             }
         })

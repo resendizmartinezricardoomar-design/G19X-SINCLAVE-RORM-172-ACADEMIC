@@ -1,7 +1,9 @@
 package com.example.evaluaciondedesempeo
 
+import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -20,70 +22,82 @@ import retrofit2.Callback
 import retrofit2.Response
 
 class CompareActivity : AppCompatActivity() {
-    private lateinit var binding: ActivityCompareBinding
+    private var _binding: ActivityCompareBinding? = null
+    private val binding get() = _binding!!
+    
     private var employeeList: List<User> = emptyList()
     private var summaryA: Summary360? = null
     private var summaryB: Summary360? = null
+    private var authToken: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityCompareBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        try {
+            _binding = ActivityCompareBinding.inflate(layoutInflater)
+            setContentView(binding.root)
 
-        loadEmployees()
+            val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
+            authToken = prefs.getString("AUTH_TOKEN", "") ?: ""
 
-        binding.btnClose.setOnClickListener { finish() }
+            loadEmployees()
 
-        val listener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                updateComparison()
+            binding.btnClose.setOnClickListener { finish() }
+
+            val listener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                    if (employeeList.isNotEmpty()) updateComparison()
+                }
+                override fun onNothingSelected(p: AdapterView<*>?) {}
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
 
-        binding.spinnerUserA.onItemSelectedListener = listener
-        binding.spinnerUserB.onItemSelectedListener = listener
+            binding.spinnerUserA.onItemSelectedListener = listener
+            binding.spinnerUserB.onItemSelectedListener = listener
+        } catch (e: Exception) {
+            Log.e("INSIGHT_FATAL", "Error en CompareActivity", e)
+            finish()
+        }
     }
 
     private fun loadEmployees() {
-        ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
+        if (authToken.isEmpty()) return
+        val tokenHeader = "Bearer $authToken"
+        ApiClient.apiService.getEmployees(tokenHeader).enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
-                if (isFinishing || isDestroyed) return
+                if (isFinishing || isDestroyed || _binding == null) return
                 if (response.isSuccessful) {
-                    employeeList = response.body() ?: emptyList()
-                    val names = employeeList.map { it.nombre ?: "Sin nombre" }
+                    employeeList = response.body()?.filter { it.nombre != null } ?: emptyList()
+                    val names = employeeList.map { it.nombre!! }
                     val adapter = ArrayAdapter(this@CompareActivity, android.R.layout.simple_spinner_item, names)
                     adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                     binding.spinnerUserA.adapter = adapter
                     binding.spinnerUserB.adapter = adapter
                 }
             }
-            override fun onFailure(call: Call<List<User>>, t: Throwable) {
-                if (isFinishing || isDestroyed) return
-                Toast.makeText(this@CompareActivity, "Error de conexión", Toast.LENGTH_SHORT).show()
-            }
+            override fun onFailure(call: Call<List<User>>, t: Throwable) {}
         })
     }
 
     private fun updateComparison() {
-        val posA = binding.spinnerUserA.selectedItemPosition
-        val posB = binding.spinnerUserB.selectedItemPosition
+        try {
+            val posA = binding.spinnerUserA.selectedItemPosition
+            val posB = binding.spinnerUserB.selectedItemPosition
 
-        if (posA < 0 || posB < 0 || employeeList.isEmpty()) return
-        if (posA == posB) {
-            Toast.makeText(this, "Seleccione dos colaboradores distintos", Toast.LENGTH_SHORT).show()
-            return
+            if (employeeList.isEmpty() || posA < 0 || posB < 0 || posA >= employeeList.size || posB >= employeeList.size) return
+            if (posA == posB) return
+
+            fetchData(employeeList[posA].id, true)
+            fetchData(employeeList[posB].id, false)
+        } catch (e: Exception) {
+            Log.e("INSIGHT_ERROR", "Error al actualizar comparación", e)
         }
-
-        fetchData(employeeList[posA].id, true)
-        fetchData(employeeList[posB].id, false)
     }
 
     private fun fetchData(userId: Int, isUserA: Boolean) {
-        ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
+        val tokenHeader = "Bearer $authToken"
+        ApiClient.apiService.getSummary360(tokenHeader, userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
-                if (isFinishing || isDestroyed) return
-                if (response.isSuccessful) {
+                if (isFinishing || isDestroyed || _binding == null) return
+                if (response.isSuccessful && response.body() != null) {
                     if (isUserA) summaryA = response.body()
                     else summaryB = response.body()
                     renderChart()
@@ -94,53 +108,52 @@ class CompareActivity : AppCompatActivity() {
     }
 
     private fun renderChart() {
-        val sA = summaryA ?: return
-        val sB = summaryB ?: return
-
-        // Corrección: Uso de ?.map y elvis operator para asegurar que no sean nulos
-        val scoresA = sA.scores ?: emptyList()
-        val scoresB = sB.scores ?: emptyList()
-        
-        val entriesA = scoresA.map { RadarEntry(it) }
-        val entriesB = scoresB.map { RadarEntry(it) }
-
-        if (entriesA.isEmpty() || entriesB.isEmpty()) return
-
-        val nameA = employeeList.getOrNull(binding.spinnerUserA.selectedItemPosition)?.nombre ?: "A"
-        val nameB = employeeList.getOrNull(binding.spinnerUserB.selectedItemPosition)?.nombre ?: "B"
-
-        val dataSetA = RadarDataSet(entriesA, nameA)
-        dataSetA.apply {
-            color = Color.parseColor("#6366F1")
-            fillColor = Color.parseColor("#6366F1")
-            setDrawFilled(true)
-            fillAlpha = 50
-            lineWidth = 3f
-        }
-
-        val dataSetB = RadarDataSet(entriesB, nameB)
-        dataSetB.apply {
-            color = Color.parseColor("#10B981")
-            fillColor = Color.parseColor("#10B981")
-            setDrawFilled(true)
-            fillAlpha = 50
-            lineWidth = 3f
-        }
-
-        binding.radarChartCompare.apply {
-            data = RadarData(dataSetA, dataSetB)
-            description.isEnabled = false
-            // Corrección: Manejo de labels nulos
-            xAxis.valueFormatter = IndexAxisValueFormatter(sA.labels ?: emptyList())
-            xAxis.textColor = Color.parseColor("#64748B")
-            xAxis.textSize = 10f
+        try {
+            val sA = summaryA ?: return
+            val sB = summaryB ?: return
             
-            yAxis.axisMinimum = 0f
-            yAxis.axisMaximum = 100f
-            yAxis.setDrawLabels(false)
+            if (_binding == null) return
 
-            animateXY(1000, 1000)
-            invalidate()
+            val scoresA = sA.scores?.filterNotNull() ?: emptyList()
+            val scoresB = sB.scores?.filterNotNull() ?: emptyList()
+            
+            if (scoresA.isEmpty() || scoresB.isEmpty()) return
+
+            val entriesA = scoresA.map { RadarEntry(it) }
+            val entriesB = scoresB.map { RadarEntry(it) }
+
+            val dataSetA = RadarDataSet(entriesA, "Colaborador A").apply {
+                color = Color.parseColor("#6366F1")
+                setDrawFilled(true)
+                fillAlpha = 40
+                lineWidth = 3f
+            }
+
+            val dataSetB = RadarDataSet(entriesB, "Colaborador B").apply {
+                color = Color.parseColor("#10B981")
+                setDrawFilled(true)
+                fillAlpha = 40
+                lineWidth = 3f
+            }
+
+            binding.radarChartCompare.apply {
+                data = RadarData(dataSetA, dataSetB)
+                description.isEnabled = false
+                xAxis.valueFormatter = IndexAxisValueFormatter(sA.labels ?: emptyList())
+                xAxis.textColor = Color.parseColor("#94A3B8")
+                yAxis.axisMinimum = 0f
+                yAxis.axisMaximum = 100f
+                yAxis.setDrawLabels(false)
+                animateXY(800, 800)
+                invalidate()
+            }
+        } catch (e: Exception) {
+            Log.e("INSIGHT_ERROR", "Error al renderizar gráfico", e)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 }

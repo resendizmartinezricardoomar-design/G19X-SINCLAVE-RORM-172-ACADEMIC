@@ -5,11 +5,12 @@
     android:layout_height="match_parent"
     android:background="#F8FAFC">
 
+    <!-- Header Indigo -->
     <View
         android:id="@+id/headerView"
         android:layout_width="match_parent"
-        android:layout_height="140dp"
-        android:background="#0F172A"
+        android:layout_height="180dp"
+        android:background="#4F46E5"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
@@ -17,24 +18,25 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
-        android:text="COMPARATIVA DE TALENTO"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.1"
+        android:text="COMPARATIVA ESTRATÉGICA"
+        android:textColor="#E0E7FF"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-black"
+        android:letterSpacing="0.2"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Selectores en Tarjeta Blanca -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardSelectors"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="-40dp"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="8dp"
-        app:layout_constraintTop_toBottomOf="@id/headerView">
+        android:layout_marginTop="20dp"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="10dp"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -45,10 +47,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Seleccione Colaboradores"
-                android:textColor="#64748B"
-                android:textSize="11sp"
-                android:textStyle="bold"
+                android:text="TALENTO A CONTRASTAR"
+                android:textColor="#94A3B8"
+                android:textSize="10sp"
+                android:fontFamily="sans-serif-black"
                 android:textAllCaps="true"/>
 
             <LinearLayout
@@ -63,18 +65,23 @@
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:layout_marginEnd="8dp"/>
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/ic_logo_insight"
+                    android:backgroundTint="#F1F5F9"/>
 
                 <Spinner
                     android:id="@+id/spinnerUserB"
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"/>
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/ic_logo_insight"
+                    android:backgroundTint="#F1F5F9"/>
             </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Gráfico Radar -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardRadar"
         android:layout_width="match_parent"
@@ -105,10 +112,10 @@
         style="@style/Widget.MaterialComponents.Button.TextButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
-        android:text="Exportar Comparativa como Imagen"
+        android:text="EXPORTAR COMPARATIVA"
         android:textColor="#6366F1"
         android:textSize="10sp"
+        android:fontFamily="sans-serif-black"
         app:icon="@android:drawable/ic_menu_camera"
         app:iconTint="#6366F1"
         app:layout_constraintBottom_toTopOf="@id/btnClose"
@@ -121,8 +128,9 @@
         android:layout_height="60dp"
         android:layout_margin="24dp"
         android:text="VOLVER AL PANEL"
-        android:textStyle="bold"
-        app:cornerRadius="16dp"
+        android:fontFamily="sans-serif-black"
+        android:backgroundTint="#4F46E5"
+        app:cornerRadius="18dp"
         app:layout_constraintBottom_toBottomOf="parent"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -131,9 +131,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:layout_marginBottom="40dp"
             app:cardBackgroundColor="#EFF6FF"
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cvLogin">
             <LinearLayout
                 android:layout_width="match_parent"
@@ -173,45 +175,6 @@
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-
-        <!-- Modo Desarrollador -->
-        <TextView
-            android:id="@+id/tvDevMode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:text="MODO DESARROLLADOR"
-            android:textColor="#CBD5E1"
-            android:textSize="9sp"
-            android:textStyle="bold"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/cvVerify" />
-
-        <LinearLayout
-            android:id="@+id/llDevTools"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:layout_marginBottom="32dp"
-            android:background="#F1F5F9"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tvDevMode">
-            <Spinner
-                android:id="@+id/spinnerQuickLogin"
-                android:layout_width="match_parent"
-                android:layout_height="40dp" />
-            <Button
-                android:id="@+id/btnQuickEntry"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ACCESO RÁPIDO"
-                android:textColor="#64748B" />
-        </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.core.widget.NestedScrollView>

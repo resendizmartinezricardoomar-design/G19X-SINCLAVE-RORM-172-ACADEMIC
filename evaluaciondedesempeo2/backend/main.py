@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import engine, Base, get_db, SessionLocal
 from models import Usuario, Evaluacion
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from passlib.context import CryptContext
@@ -19,6 +19,7 @@ from fpdf import FPDF
 SECRET_KEY = os.getenv("SECRET_KEY", "insight_super_secret_key_9988")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
+# Cambiado a pbkdf2_sha256 para evitar errores de compatibilidad con bcrypt en Python 3.14
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
@@ -119,11 +120,30 @@ class UserCreate(BaseModel):
     nombre: str
     email: EmailStr
     password: str
-    rol: str = "EMPLOYEE"
 
 class VerifyRequest(BaseModel):
     email: str
     codigo: str
+
+Indicador = Field(ge=0, le=100)
+
+class EvaluacionCreate(BaseModel):
+    evaluado_id: int
+    tipo_evaluacion: str
+    relacion_evaluador: str
+    obj_cumplimiento: float = Indicador
+    puntualidad_asistencia: float = Indicador
+    calidad_trabajo: float = Indicador
+    productividad: float = Indicador
+    trabajo_equipo: float = Indicador
+    conocimiento_habilidad: float = Indicador
+    comunicacion: float = Indicador
+    adaptabilidad: float = Indicador
+    iniciativa: float = Indicador
+    responsabilidad: float = Indicador
+    actitud_profesional: float = Indicador
+    desarrollo_profesional: float = Indicador
+    comentarios_texto: str = ""
 
 app = FastAPI(title="InsightHR Unified Master API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -153,7 +173,8 @@ async def registrar_u(req: UserCreate, db: Session = Depends(get_db)):
 
     codigo_v = str(random.randint(100000, 999999))
     hashed = pwd_context.hash(req.password)
-    u = Usuario(nombre=req.nombre.strip(), email=email_clean, hashed_password=hashed, rol=req.rol, is_active=False, verification_code=codigo_v)
+    # Siempre registramos como EMPLOYEE por seguridad
+    u = Usuario(nombre=req.nombre.strip(), email=email_clean, hashed_password=hashed, rol="EMPLOYEE", is_active=False, verification_code=codigo_v)
     db.add(u); db.commit()
     enviar_correo_emailjs(email_clean, codigo_v)
     print(f"🔑 CÓDIGO GENERADO: {codigo_v}")
@@ -201,11 +222,19 @@ def listar_evaluaciones(db: Session = Depends(get_db), current_user: Usuario = D
     } for e in evs]
 
 @app.post("/api/evaluaciones")
-async def crear_ev(data: dict = Body(...), db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    db_ev = Evaluacion(**data)
-    metrics = [v for k,v in data.items() if isinstance(v, (int,float)) and k not in ["evaluado_id", "evaluador_id", "id"]]
-    if metrics:
-        db_ev.puntuacion_promedio = round(sum(metrics) / len(metrics), 1)
+async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    valores = data.model_dump()
+    db_ev = Evaluacion(**valores, evaluador_id=current_user.id)
+
+    # Lista de los 12 indicadores para calcular el promedio
+    indicadores = [
+        data.obj_cumplimiento, data.puntualidad_asistencia, data.calidad_trabajo,
+        data.productividad, data.trabajo_equipo, data.conocimiento_habilidad,
+        data.comunicacion, data.adaptabilidad, data.iniciativa,
+        data.responsabilidad, data.actitud_profesional, data.desarrollo_profesional
+    ]
+    db_ev.puntuacion_promedio = round(sum(indicadores) / len(indicadores), 1)
+
     db.add(db_ev); db.commit()
     return {"status": "ok"}
 
