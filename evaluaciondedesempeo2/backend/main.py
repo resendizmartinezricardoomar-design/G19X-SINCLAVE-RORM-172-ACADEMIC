@@ -1,4 +1,13 @@
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno al inicio
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("Falta SECRET_KEY en el .env (ver .env.example)")
+
 from fastapi import FastAPI, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -11,16 +20,11 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
-from dotenv import load_dotenv
 import uvicorn, random, logging, io, json, urllib.request
 from ai_engine import ai_engine
 from fpdf import FPDF
 
-# Cargar variables de entorno si existen
-load_dotenv()
-
 # Configuración de Seguridad
-SECRET_KEY = os.getenv("SECRET_KEY", "insight_super_secret_key_9988")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 600
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -32,10 +36,10 @@ logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
 
 # --- CONFIGURACIÓN EMAILJS ---
-EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID", "service_rm6zifg")
-EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID", "template_j7y4f2o")
-EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY", "Coo1K1QyCwKASIl5B")
-EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY", "409pIDJDDB6qjIKSi93gB")
+EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID")
+EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID")
+EMAILJS_PUBLIC_KEY = os.getenv("EMAILJS_PUBLIC_KEY")
+EMAILJS_PRIVATE_KEY = os.getenv("EMAILJS_PRIVATE_KEY")
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -97,13 +101,19 @@ def enviar_correo_emailjs(email_destino, codigo):
 
 # --- ACTUALIZACIÓN DE SEGURIDAD PARA EL ADMIN ---
 def create_default_admin():
+    email = os.getenv("ADMIN_EMAIL")
+    password = os.getenv("ADMIN_PASSWORD")
+    if not email or not password:
+        logger.warning("Sin ADMIN_EMAIL/ADMIN_PASSWORD en el .env: no se crea administrador")
+        return
+
     db = SessionLocal()
     try:
-        admin = db.query(Usuario).filter(Usuario.email == "admin@insight.com").first()
+        admin = db.query(Usuario).filter(Usuario.email == email).first()
         if not admin:
-            hashed = pwd_context.hash("admin123")
+            hashed = pwd_context.hash(password)
             new_admin = Usuario(
-                nombre="Administrador Maestro", email="admin@insight.com",
+                nombre="Administrador Maestro", email=email,
                 hashed_password=hashed, rol="ADMIN", is_active=True
             )
             db.add(new_admin); db.commit()
@@ -112,7 +122,7 @@ def create_default_admin():
             if not admin.is_active:
                 admin.is_active = True; db.commit()
             if not str(admin.hashed_password).startswith("$pbkdf2-sha256$"):
-                admin.hashed_password = pwd_context.hash("admin123")
+                admin.hashed_password = pwd_context.hash(password)
                 db.commit()
                 print("\n🔐 SEGURIDAD DE ADMIN ACTUALIZADA A PBKDF2\n")
     finally: db.close()
