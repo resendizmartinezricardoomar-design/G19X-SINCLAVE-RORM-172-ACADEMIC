@@ -47,7 +47,8 @@ class EvaluationActivity : AppCompatActivity() {
 
             val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
             userId = intent.getIntExtra("USER_ID", prefs.getInt("USER_ID", -1))
-            authToken = prefs.getString("AUTH_TOKEN", "") ?: ""
+            // Se usa "TOKEN" para consistencia con ApiClient
+            authToken = prefs.getString("TOKEN", "") ?: ""
 
             setupQuestions()
             loadEmployees()
@@ -87,8 +88,8 @@ class EvaluationActivity : AppCompatActivity() {
 
     private fun loadEmployees() {
         if (authToken.isEmpty()) return
-        val tokenHeader = "Bearer $authToken"
-        ApiClient.apiService.getEmployees(tokenHeader).enqueue(object : Callback<List<User>> {
+        // No pasamos el tokenHeader porque el Interceptor de ApiClient lo hace automáticamente
+        ApiClient.apiService.getEmployees().enqueue(object : Callback<List<User>> {
             override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
                 if (isFinishing || isDestroyed) return
                 if (response.isSuccessful) {
@@ -99,7 +100,10 @@ class EvaluationActivity : AppCompatActivity() {
                     binding.spinnerEmpleado.adapter = adapter
                 }
             }
-            override fun onFailure(call: Call<List<User>>, t: Throwable) {}
+            override fun onFailure(call: Call<List<User>>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
+                Toast.makeText(this@EvaluationActivity, "Error de conexión", Toast.LENGTH_SHORT).show()
+            }
         })
     }
 
@@ -138,8 +142,8 @@ class EvaluationActivity : AppCompatActivity() {
             )
 
             binding.btnSubmit.isEnabled = false
-            val tokenHeader = "Bearer $authToken"
-            ApiClient.apiService.createEvaluation(tokenHeader, request).enqueue(object : Callback<EvaluationResponse> {
+            // No pasamos el tokenHeader porque el Interceptor de ApiClient lo hace automáticamente
+            ApiClient.apiService.createEvaluation(request).enqueue(object : Callback<EvaluationResponse> {
                 override fun onResponse(call: Call<EvaluationResponse>, response: Response<EvaluationResponse>) {
                     if (isFinishing || isDestroyed) return
                     if (response.isSuccessful) {
@@ -147,10 +151,13 @@ class EvaluationActivity : AppCompatActivity() {
                         finish()
                     } else {
                         binding.btnSubmit.isEnabled = true
+                        Toast.makeText(this@EvaluationActivity, "Error al enviar auditoría", Toast.LENGTH_SHORT).show()
                     }
                 }
                 override fun onFailure(call: Call<EvaluationResponse>, t: Throwable) {
+                    if (isFinishing || isDestroyed) return
                     binding.btnSubmit.isEnabled = true
+                    Toast.makeText(this@EvaluationActivity, "Fallo de red", Toast.LENGTH_SHORT).show()
                 }
             })
         } catch (e: Exception) {

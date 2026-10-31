@@ -26,6 +26,7 @@ async function apiFetch(endpoint, options = {}) {
 
         const response = await fetch(`${API_BASE}${endpoint}`, options);
         if (response.status === 401) { handleLogout(); return null; }
+        // Para /usuarios y /verificar, el backend devuelve JSON con status: success/verified
         if (!response.ok) return null;
         return await response.json();
     } catch (e) { return null; }
@@ -46,23 +47,50 @@ window.publicRegister = async function() {
     const nombre = document.getElementById('reg-pub-nombre').value.trim();
     const email = document.getElementById('reg-pub-email').value.trim();
     const password = document.getElementById('reg-pub-pass').value.trim();
-    if (!nombre || !email || !password) return alert("⚠️ Completa todos los campos");
-    const res = await apiFetch('/usuarios', { method: 'POST', body: JSON.stringify({ nombre, email, password }) });
+
+    if (!nombre || !email || !password) {
+        alert("⚠️ Completa todos los campos");
+        return;
+    }
+
+    const res = await apiFetch('/usuarios', {
+        method: 'POST',
+        body: JSON.stringify({ nombre, email, password })
+    });
+
     if (res && res.status === "success") {
-        alert("✅ Registro exitoso. Valida tu cuenta con el código.");
+        alert("✅ Registro exitoso. Se ha enviado un código de activación a tu correo.");
+        // Mostrar el cuadro de verificación
+        document.getElementById('verify-box').classList.remove('hidden');
+        // Cambiar a la pestaña de login para que se vea el campo de email (que sirve para validar)
         window.switchTab('login');
         document.getElementById('login-email').value = email;
-    } else { alert("❌ Error: El correo ya existe."); }
+    } else {
+        alert("❌ Error: El correo ya existe o el servidor no responde.");
+    }
 };
 
 window.verifyWebAccount = async function() {
     const email = document.getElementById('login-email').value.trim();
-    const code = document.getElementById('verify-code').value.trim();
-    const res = await apiFetch('/verificar', { method: 'POST', body: JSON.stringify({ email, codigo: code }) });
+    const codigo = document.getElementById('verify-code').value.trim();
+
+    if (!email || !codigo) {
+        alert("⚠️ Asegúrate de que el correo esté en el campo de 'Acceso' e ingresa el código.");
+        return;
+    }
+
+    const res = await apiFetch('/verificar', {
+        method: 'POST',
+        body: JSON.stringify({ email, codigo })
+    });
+
     if (res && res.status === "verified") {
-        alert("✅ ¡Cuenta validada!");
+        alert("✅ ¡Cuenta validada! Ya puedes entrar al sistema.");
         document.getElementById('verify-box').classList.add('hidden');
-    } else { alert("❌ Código incorrecto."); }
+        document.getElementById('verify-code').value = "";
+    } else {
+        alert("❌ Código incorrecto.");
+    }
 };
 
 window.handleLogout = function() {
@@ -237,6 +265,22 @@ async function updateRadar(canvasId, userId, label) {
 }
 
 function renderAIInsights(aiData) {
+    let container = document.getElementById('ai-insights-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'ai-insights-container';
+        document.getElementById('section-dashboard').appendChild(container);
+    }
+    container.innerHTML = `
+        <div class="mt-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100 shadow-sm col-span-full">
+            <h6 class="text-indigo-900 font-black text-xs uppercase mb-3 flex items-center"><i class="fas fa-robot mr-2"></i> IA Insight</h6>
+            <p class="text-slate-600 text-xs mb-3">Sentimiento: <b>${aiData.sentimiento}</b></p>
+            <div class="flex flex-wrap gap-2">${aiData.recomendaciones.map(r => `<span class="bg-white text-indigo-700 text-[9px] font-bold px-3 py-2 rounded-xl border border-indigo-100">${r}</span>`).join('')}</div>
+        </div>
+    `;
+}
+
+async function renderAIInsights(aiData) {
     let container = document.getElementById('ai-insights-container');
     if (!container) {
         container = document.createElement('div');

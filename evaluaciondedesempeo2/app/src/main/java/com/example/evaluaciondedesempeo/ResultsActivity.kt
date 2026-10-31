@@ -41,7 +41,7 @@ class ResultsActivity : AppCompatActivity() {
             setContentView(binding.root)
 
             val prefs = getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
-            authToken = prefs.getString("AUTH_TOKEN", "") ?: ""
+            authToken = prefs.getString("TOKEN", "") ?: prefs.getString("AUTH_TOKEN", "") ?: ""
             
             currentUserId = intent.getIntExtra("USER_ID", -1)
             currentEmployeeName = intent.getStringExtra("USER_NAME") ?: "Colaborador"
@@ -58,9 +58,8 @@ class ResultsActivity : AppCompatActivity() {
     }
 
     private fun loadRadarData(userId: Int) {
-        if (authToken.isEmpty()) return
-        val tokenHeader = "Bearer $authToken"
-        ApiClient.apiService.getSummary360(tokenHeader, userId).enqueue(object : Callback<Summary360> {
+        // El token se añade automáticamente via ApiClient Interceptor
+        ApiClient.apiService.getSummary360(userId).enqueue(object : Callback<Summary360> {
             override fun onResponse(call: Call<Summary360>, response: Response<Summary360>) {
                 if (isFinishing || isDestroyed) return
                 if (response.isSuccessful && response.body() != null) {
@@ -143,8 +142,8 @@ class ResultsActivity : AppCompatActivity() {
 
     private fun downloadPdfReport(userId: Int) {
         binding.btnDownloadReport.isEnabled = false
-        val tokenHeader = "Bearer $authToken"
-        ApiClient.apiService.downloadReport(tokenHeader, userId).enqueue(object : Callback<ResponseBody> {
+        // El token se añade automáticamente via ApiClient Interceptor
+        ApiClient.apiService.downloadReport(userId).enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 if (isFinishing || isDestroyed) return
                 if (response.isSuccessful && response.body() != null) {
