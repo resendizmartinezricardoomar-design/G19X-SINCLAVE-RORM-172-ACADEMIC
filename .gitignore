@@ -1,0 +1,29 @@
+# IDEs y Editores
+.idea/
+*.iml
+*.iws
+.vscode/
+
+# Python / Backend
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/.env
+**/.venv
+**/env/
+**/venv/
+**/evaluacion.db
+
+# Android
+**/.gradle/
+**/build/
+**/captures/
+**/.externalNativeBuild/
+**/.cxx/
+**/local.properties
+
+# OS / Varios
+.DS_Store
+Thumbs.db
+*.log
+evaluaciondedesempeo2/auto_sync.ps1
