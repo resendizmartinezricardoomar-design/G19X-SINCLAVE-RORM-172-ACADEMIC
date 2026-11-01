@@ -66,6 +66,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
+def requiere_admin(user: Usuario):
+    if user.rol != "ADMIN":
+        raise HTTPException(status_code=403, detail="Acceso denegado: Se requiere rol de Administrador")
+
 def enviar_correo_emailjs(email_destino, codigo):
     url = "https://api.emailjs.com/api/v1.0/email/send"
     data = {
@@ -218,8 +222,7 @@ def get_empleados(db: Session = Depends(get_db), current_user: Usuario = Depends
 
 @app.delete("/api/usuarios/{user_id}")
 async def eliminar_u(user_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    if current_user.rol != "ADMIN":
-        raise HTTPException(status_code=403, detail="No autorizado")
+    requiere_admin(current_user)
     u = db.query(Usuario).filter(Usuario.id == user_id).first()
     if u:
         db.query(Evaluacion).filter(Evaluacion.evaluado_id == user_id).delete()
@@ -230,6 +233,7 @@ async def eliminar_u(user_id: int, db: Session = Depends(get_db), current_user: 
 
 @app.get("/api/evaluaciones")
 def listar_evaluaciones(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    requiere_admin(current_user)
     evs = db.query(Evaluacion).order_by(Evaluacion.fecha.desc()).all()
     return [{
         "fecha": e.fecha.strftime("%Y-%m-%d") if e.fecha else "",
@@ -240,6 +244,10 @@ def listar_evaluaciones(db: Session = Depends(get_db), current_user: Usuario = D
 
 @app.post("/api/evaluaciones")
 async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    requiere_admin(current_user)
+    if data.evaluado_id == current_user.id:
+        raise HTTPException(status_code=400, detail="No puedes evaluarte a ti mismo")
+
     valores = data.model_dump()
     db_ev = Evaluacion(**valores, evaluador_id=current_user.id)
     indicadores = [
@@ -254,6 +262,9 @@ async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), curren
 
 @app.get("/api/evaluaciones/resumen/{uid}")
 def resumen(uid: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    if current_user.rol != "ADMIN" and current_user.id != uid:
+        raise HTTPException(status_code=403, detail="No autorizado para ver este resumen")
+
     metrics = ["obj_cumplimiento", "puntualidad_asistencia", "calidad_trabajo", "productividad", "trabajo_equipo", "conocimiento_habilidad", "comunicacion", "adaptabilidad", "iniciativa", "responsabilidad", "actitud_profesional", "desarrollo_profesional"]
     labels = ["Obj", "Punt", "Calid", "Prod", "Equip", "Skill", "Comu", "Adap", "Inic", "Resp", "Actit", "Desa"]
     scores = []
@@ -273,6 +284,9 @@ def resumen(uid: int, db: Session = Depends(get_db), current_user: Usuario = Dep
 
 @app.get("/api/reporte/{usuario_id}")
 async def download_report(usuario_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    if current_user.rol != "ADMIN" and current_user.id != usuario_id:
+        raise HTTPException(status_code=403, detail="No autorizado para descargar este reporte")
+
     u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not u: raise HTTPException(status_code=404)
     avg = db.query(func.avg(Evaluacion.puntuacion_promedio)).filter(Evaluacion.evaluado_id == u.id).scalar() or 0.0
