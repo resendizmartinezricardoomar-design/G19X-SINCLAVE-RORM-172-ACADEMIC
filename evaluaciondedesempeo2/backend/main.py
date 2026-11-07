@@ -20,7 +20,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
-import uvicorn, random, logging, io, json, urllib.request
+import uvicorn, random, logging, io, json, urllib.request, secrets
 from ai_engine import ai_engine
 from fpdf import FPDF
 
@@ -193,12 +193,20 @@ async def registrar_u(req: UserCreate, db: Session = Depends(get_db)):
         db.delete(v); db.commit()
     elif v: raise HTTPException(status_code=400, detail="El correo ya existe")
 
-    codigo_v = str(random.randint(100000, 999999))
+    codigo_v = str(secrets.randbelow(900000) + 100000)
     hashed = pwd_context.hash(req.password)
-    u = Usuario(nombre=req.nombre.strip(), email=email_clean, hashed_password=hashed, rol="EMPLOYEE", is_active=False, verification_code=codigo_v)
+    u = Usuario(
+        nombre=req.nombre.strip(),
+        email=email_clean,
+        hashed_password=hashed,
+        rol="EMPLOYEE",
+        is_active=False,
+        verification_code=codigo_v,
+        verification_expires=datetime.utcnow() + timedelta(minutes=15),
+        verification_attempts=0
+    )
     db.add(u); db.commit()
     enviar_correo_emailjs(email_clean, codigo_v)
-    print(f"🔑 CÓDIGO GENERADO: {codigo_v}")
     return {"status": "success"}
 
 @app.post("/api/verificar")
@@ -206,10 +214,21 @@ async def verificar_cuenta(req: VerifyRequest, db: Session = Depends(get_db)):
     email_clean = req.email.lower().strip()
     u = db.query(Usuario).filter(Usuario.email == email_clean).first()
     if not u: raise HTTPException(status_code=404)
+
+    if (u.verification_attempts or 0) >= 5 or not u.verification_expires or u.verification_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Código vencido o demasiados intentos; regístrate de nuevo")
+
     if u.verification_code == req.codigo.strip():
-        u.is_active = True; u.verification_code = None; db.commit()
+        u.is_active = True
+        u.verification_code = None
+        u.verification_expires = None
+        u.verification_attempts = 0
+        db.commit()
         return {"status": "verified"}
-    raise HTTPException(status_code=400, detail="Código incorrecto")
+    else:
+        u.verification_attempts = (u.verification_attempts or 0) + 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Código incorrecto")
 
 @app.get("/api/empleados")
 def get_empleados(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):

@@ -14,6 +14,8 @@ class Usuario(Base):
     # Campos para verificación por correo
     is_active = Column(Boolean, default=False)
     verification_code = Column(String, nullable=True)
+    verification_expires = Column(DateTime, nullable=True)
+    verification_attempts = Column(Integer, default=0)
 
 class Evaluacion(Base):
     __tablename__ = "evaluaciones"
