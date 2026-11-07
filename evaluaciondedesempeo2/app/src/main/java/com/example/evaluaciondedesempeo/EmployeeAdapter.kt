@@ -29,10 +29,11 @@ class EmployeeAdapter(
             holder.binding.tvEmployeeName.text = employee.nombre ?: "Colaborador"
             holder.binding.tvEmployeeRole.text = employee.rol ?: "GENERAL"
             
-            // Seguridad de visibilidad
+            // Seguridad de visibilidad: Solo el ADMIN puede ver acciones sobre otros empleados
             val adminVisibility = if (isAdmin) View.VISIBLE else View.GONE
             holder.binding.btnEvaluate.visibility = adminVisibility
             holder.binding.btnDeleteEmployee.visibility = adminVisibility
+            holder.binding.btnViewRadar.visibility = adminVisibility
             
             holder.binding.btnEvaluate.setOnClickListener { onEvaluateClick(employee) }
             holder.binding.btnViewRadar.setOnClickListener { onViewRadarClick(employee) }

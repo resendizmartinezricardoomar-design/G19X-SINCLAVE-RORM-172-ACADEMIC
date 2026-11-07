@@ -93,8 +93,8 @@
             <nav class="flex-1 px-4 space-y-1 mt-4">
                 <button onclick="showSection('dashboard', this)" class="nav-btn active flex items-center gap-4"><i class="fas fa-columns w-5 text-center"></i> Dashboard</button>
                 <button onclick="showSection('talent', this)" class="nav-btn flex items-center gap-4"><i class="fas fa-users w-5 text-center"></i> Mi Equipo</button>
-                <button onclick="showSection('compare', this)" class="nav-btn flex items-center gap-4"><i class="fas fa-balance-scale w-5 text-center"></i> Comparativa</button>
-                <button onclick="showSection('evaluations', this)" class="nav-btn flex items-center gap-4"><i class="fas fa-shield-alt w-5 text-center"></i> Auditorías</button>
+                <button id="nav-compare" onclick="showSection('compare', this)" class="nav-btn flex items-center gap-4"><i class="fas fa-balance-scale w-5 text-center"></i> Comparativa</button>
+                <button id="nav-evaluations" onclick="showSection('evaluations', this)" class="nav-btn flex items-center gap-4"><i class="fas fa-shield-alt w-5 text-center"></i> Auditorías</button>
             </nav>
             <div class="p-6 border-t border-slate-800">
                 <button onclick="window.handleLogout()" class="w-full py-3 bg-red-500/10 text-red-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Cerrar Sesión</button>
