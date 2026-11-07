@@ -3,14 +3,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Ruta absoluta definitiva
+# Configuración de la base de datos
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "evaluacion.db")
+DEFAULT_DB = f"sqlite:///{os.path.join(BASE_DIR, 'evaluacion.db')}"
 
-print(f"\n--- 💾 BASE DE DATOS CONECTADA EN: {DB_PATH} ---\n")
+# Prioriza DATABASE_URL del entorno (.env), si no existe usa SQLite local
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB)
 
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

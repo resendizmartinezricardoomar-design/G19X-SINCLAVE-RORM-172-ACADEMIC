@@ -217,12 +217,12 @@ def get_empleados(db: Session = Depends(get_db), current_user: Usuario = Depends
     usuarios = db.query(Usuario).all()
     res = []
     for u in usuarios:
-        if not is_admin and u.id != current_user.id:
-            # Para empleados viendo a otros: ocultar email y score
-            res.append({"id": u.id, "nombre": u.nombre, "rol": u.rol, "email": None, "score": 0.0})
-        else:
+        if is_admin or u.id == current_user.id:
             avg = db.query(func.avg(Evaluacion.puntuacion_promedio)).filter(Evaluacion.evaluado_id == u.id).scalar()
             res.append({"id": u.id, "nombre": u.nombre, "rol": u.rol, "email": u.email, "score": round(float(avg or 0.0), 1)})
+        else:
+            # Para empleados viendo a otros: ocultar email y score
+            res.append({"id": u.id, "nombre": u.nombre, "rol": u.rol, "email": None, "score": 0.0})
     return res
 
 @app.delete("/api/usuarios/{user_id}")
