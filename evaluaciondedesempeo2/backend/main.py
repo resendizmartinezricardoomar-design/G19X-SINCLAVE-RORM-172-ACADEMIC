@@ -35,6 +35,16 @@ logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 
+# Constantes para el reporte
+METRIC_LABELS = {
+    "obj_cumplimiento": "Objetivos", "puntualidad_asistencia": "Puntualidad",
+    "calidad_trabajo": "Calidad", "productividad": "Productividad",
+    "trabajo_equipo": "Equipo", "conocimiento_habilidad": "Habilidad",
+    "comunicacion": "Comunicación", "adaptabilidad": "Adaptabilidad",
+    "iniciativa": "Iniciativa", "responsabilidad": "Responsabilidad",
+    "actitud_profesional": "Actitud", "desarrollo_profesional": "Desarrollo"
+}
+
 # --- CONFIGURACIÓN EMAILJS ---
 EMAILJS_SERVICE_ID = os.getenv("EMAILJS_SERVICE_ID")
 EMAILJS_TEMPLATE_ID = os.getenv("EMAILJS_TEMPLATE_ID")
@@ -284,27 +294,44 @@ async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), curren
     db.add(db_ev); db.commit()
     return {"status": "ok"}
 
-@app.get("/api/evaluaciones/resumen/{uid}")
-def resumen(uid: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    if current_user.rol != "ADMIN" and current_user.id != uid:
-        raise HTTPException(status_code=403, detail="No autorizado para ver este resumen")
-
-    metrics = ["obj_cumplimiento", "puntualidad_asistencia", "calidad_trabajo", "productividad", "trabajo_equipo", "conocimiento_habilidad", "comunicacion", "adaptabilidad", "iniciativa", "responsabilidad", "actitud_profesional", "desarrollo_profesional"]
+def calcular_resumen(uid: int, db: Session):
+    metrics = list(METRIC_LABELS.keys())
     labels = ["Obj", "Punt", "Calid", "Prod", "Equip", "Skill", "Comu", "Adap", "Inic", "Resp", "Actit", "Desa"]
     scores = []
+
+    total_evals = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).count()
+
     for m in metrics:
         val = db.query(func.avg(getattr(Evaluacion, m))).filter(Evaluacion.evaluado_id == uid).scalar()
         scores.append(round(float(val or 0.0), 1))
+
     last_ev = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).order_by(Evaluacion.fecha.desc()).first()
     analisis_ia = None
     if last_ev:
         analisis_ia = ai_engine.analizar_comentarios(last_ev.comentarios_texto or "Sin comentarios", last_ev.puntuacion_promedio or 0.0)
+
+    avg_total = round(sum(scores) / len(scores), 1) if scores else 0.0
+
     kpis = {
         "Eficiencia Operativa": round(sum(scores[0:4]) / 4, 1) if scores else 0.0,
         "Competencias Blandas": round(sum(scores[4:8]) / 4, 1) if scores else 0.0,
         "Potencial y Crecimiento": round(sum(scores[8:12]) / 4, 1) if scores else 0.0
     }
-    return {"labels": labels, "scores": scores, "analisis_ia": analisis_ia, "kpis": kpis}
+
+    return {
+        "labels": labels,
+        "scores": scores,
+        "analisis_ia": analisis_ia,
+        "kpis": kpis,
+        "total_evals": total_evals,
+        "avg_total": avg_total
+    }
+
+@app.get("/api/evaluaciones/resumen/{uid}")
+def resumen(uid: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    if current_user.rol != "ADMIN" and current_user.id != uid:
+        raise HTTPException(status_code=403, detail="No autorizado para ver este resumen")
+    return calcular_resumen(uid, db)
 
 @app.get("/api/reporte/{usuario_id}")
 async def download_report(usuario_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -313,18 +340,83 @@ async def download_report(usuario_id: int, db: Session = Depends(get_db), curren
 
     u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not u: raise HTTPException(status_code=404)
-    avg = db.query(func.avg(Evaluacion.puntuacion_promedio)).filter(Evaluacion.evaluado_id == u.id).scalar() or 0.0
+
+    data = calcular_resumen(u.id, db)
+
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, "REPORTE ESTRATÉGICO DE DESEMPEÑO", ln=True, align="C")
+
+    # Encabezado
+    pdf.set_font("Arial", "B", 18)
+    pdf.set_text_color(30, 58, 138) # Indigo
+    pdf.cell(190, 15, "INSIGHTHR - REPORTE ESTRATÉGICO", ln=True, align="C")
+    pdf.set_font("Arial", "", 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(190, 5, f"Generado el: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
     pdf.ln(10)
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(190, 10, f"Colaborador: {u.nombre}", ln=True)
-    pdf.cell(190, 10, f"Email: {u.email}", ln=True)
+
+    # Información General
+    pdf.set_fill_color(248, 250, 252)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 10, f" Colaborador: {u.nombre}", ln=True, fill=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 8, f" Email: {u.email}", ln=True, fill=True)
+    pdf.cell(190, 8, f" Rol: {u.rol}", ln=True, fill=True)
+    pdf.cell(190, 8, f" Evaluaciones promediadas: {data['total_evals']}", ln=True, fill=True)
     pdf.ln(10)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(190, 15, f"SCORE GLOBAL: {round(float(avg), 1)} / 100", ln=True, fill=True)
+
+    # Score Global
+    pdf.set_fill_color(99, 102, 241)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(190, 15, f" SCORE GLOBAL: {data['avg_total']} / 100", ln=True, align="C", fill=True)
+    pdf.ln(10)
+
+    # KPIs
+    pdf.set_text_color(30, 58, 138)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 10, "KPIs ESTRATÉGICOS", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "", 11)
+    for kpi, valor in data["kpis"].items():
+        pdf.cell(130, 8, f" - {kpi}:", border="B")
+        pdf.cell(60, 8, f"{valor} / 100", border="B", ln=True, align="R")
+    pdf.ln(10)
+
+    # Tabla de Indicadores
+    pdf.set_text_color(30, 58, 138)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 10, "DETALLE DE INDICADORES (PROMEDIO)", ln=True)
+    pdf.set_fill_color(241, 245, 249)
+    pdf.set_text_color(100, 116, 139)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(130, 8, " INDICADOR", border=1, fill=True)
+    pdf.cell(60, 8, " PUNTAJE", border=1, fill=True, ln=True, align="C")
+
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "", 10)
+    metrics_list = list(METRIC_LABELS.values())
+    for i, label in enumerate(metrics_list):
+        pdf.cell(130, 8, f" {label}", border=1)
+        pdf.cell(60, 8, f"{data['scores'][i]}", border=1, ln=True, align="C")
+    pdf.ln(10)
+
+    # Análisis IA
+    if data["analisis_ia"]:
+        pdf.set_text_color(30, 58, 138)
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(190, 10, "INSIGHT DE INTELIGENCIA ARTIFICIAL", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(190, 8, f"Sentimiento Predominante: {data['analisis_ia']['sentimiento']}", ln=True)
+        pdf.ln(2)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(190, 8, "Cursos y Capacitaciones Recomendadas:", ln=True)
+        pdf.set_font("Arial", "", 10)
+        for curso in data["analisis_ia"]["recomendaciones"]:
+            pdf.cell(190, 7, f" > {curso}", ln=True)
+
     pdf_content = pdf.output(dest='S')
     output = io.BytesIO(pdf_content)
     return StreamingResponse(output, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Reporte_InsightHR_{u.id}.pdf"})
