@@ -80,7 +80,7 @@ class DashboardActivity : AppCompatActivity() {
     private fun setupRecyclerView() {
         try {
             val isAdmin = userRole.equals("ADMIN", ignoreCase = true)
-            val adapter = EmployeeAdapter(emptyList(), isAdmin,
+            val adapter = EmployeeAdapter(emptyList(), isAdmin, userId,
                 onEvaluateClick = { u ->
                     val intent = Intent(this, EvaluationActivity::class.java)
                     intent.putExtra("USER_ID", userId)
@@ -124,6 +124,7 @@ class DashboardActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed || _binding == null) return
                 if (response.isSuccessful) {
                     val list = response.body() ?: emptyList()
+                    // Si el backend ya filtra, esto solo asegura no mostrarse a sí mismo de nuevo
                     val filtered = list.filter { it.id != userId && it.nombre != null }
                     (binding.rvEmployees.adapter as? EmployeeAdapter)?.updateData(filtered)
                 }

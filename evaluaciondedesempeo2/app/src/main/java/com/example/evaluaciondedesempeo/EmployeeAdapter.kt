@@ -10,6 +10,7 @@ import com.example.evaluaciondedesempeo.models.User
 class EmployeeAdapter(
     private var employees: List<User>,
     private val isAdmin: Boolean,
+    private val currentUserId: Int,
     private val onEvaluateClick: (User) -> Unit,
     private val onViewRadarClick: (User) -> Unit,
     private val onDeleteClick: (User) -> Unit
@@ -29,11 +30,14 @@ class EmployeeAdapter(
             holder.binding.tvEmployeeName.text = employee.nombre ?: "Colaborador"
             holder.binding.tvEmployeeRole.text = employee.rol ?: "GENERAL"
             
-            // Seguridad de visibilidad: Solo el ADMIN puede ver acciones sobre otros empleados
-            val adminVisibility = if (isAdmin) View.VISIBLE else View.GONE
-            holder.binding.btnEvaluate.visibility = adminVisibility
-            holder.binding.btnDeleteEmployee.visibility = adminVisibility
-            holder.binding.btnViewRadar.visibility = adminVisibility
+            val isMe = employee.id == currentUserId
+            
+            // Seguridad de visibilidad: Solo el ADMIN puede evaluar o eliminar
+            holder.binding.btnEvaluate.visibility = if (isAdmin) View.VISIBLE else View.GONE
+            holder.binding.btnDeleteEmployee.visibility = if (isAdmin) View.VISIBLE else View.GONE
+            
+            // El radar se puede ver si eres ADMIN o si eres TÚ MISMO
+            holder.binding.btnViewRadar.visibility = if (isAdmin || isMe) View.VISIBLE else View.GONE
             
             holder.binding.btnEvaluate.setOnClickListener { onEvaluateClick(employee) }
             holder.binding.btnViewRadar.setOnClickListener { onViewRadarClick(employee) }
