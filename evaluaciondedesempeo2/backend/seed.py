@@ -7,16 +7,19 @@ from models import Usuario, Evaluacion
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 
+# Cargar variables de entorno
 load_dotenv()
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 def seed_data():
     db = SessionLocal()
+    # Asegurar que las tablas existan
     Base.metadata.create_all(bind=engine)
 
     print("🌱 Iniciando carga de datos de ejemplo...")
 
     # 1. Crear Colaboradores (si no existen)
+    # Requisito: 4 o 5 colaboradores
     empleados_data = [
         {"nombre": "Carlos Ruiz", "email": "carlos@insighthr.com", "rol": "EMPLOYEE"},
         {"nombre": "Ana Lopez", "email": "ana@insighthr.com", "rol": "EMPLOYEE"},
@@ -32,18 +35,24 @@ def seed_data():
             user = Usuario(
                 nombre=emp["nombre"],
                 email=emp["email"],
-                hashed_password=pwd_context.hash("demo123"),
+                hashed_password=pwd_context.hash("demo123"), # Contraseña de demostración
                 rol=emp["rol"],
-                is_active=True
+                is_active=True # Requisito: ya activos
             )
             db.add(user)
-            db.flush() # Para obtener el ID
+            db.commit() # Commit para obtener el ID
             print(f"✅ Usuario creado: {emp['nombre']}")
+        else:
+            # Asegurar que esté activo si ya existía
+            if not user.is_active:
+                user.is_active = True
+                db.commit()
         usuarios_creados.append(user)
 
-    db.commit()
-
     # 2. Crear Evaluaciones de ejemplo
+    # Palabras clave para ai_engine.py:
+    # Sentimiento: excelente, gran, liderazgo, proactivo, mejorar, falta, tarde, error, debilidad
+    # Áreas: comunicación, tiempo, plazos, técnico, herramienta
     comentarios = [
         "Excelente liderazgo y gran proactividad en todos los proyectos.",
         "Falta mejorar en los plazos de entrega, suele llegar tarde a las reuniones.",
@@ -54,28 +63,35 @@ def seed_data():
         "Demuestra gran liderazgo, aunque debe mejorar la gestión de plazos."
     ]
 
-    # Asegurarnos de tener un evaluador (el admin suele ser el ID 1)
-    admin = db.query(Usuario).filter(Usuario.rol == "ADMIN").first()
+    # Evaluador (usamos el admin configurado en .env o el primer ADMIN que encontremos)
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin = db.query(Usuario).filter(Usuario.email == admin_email).first()
+    if not admin:
+        admin = db.query(Usuario).filter(Usuario.rol == "ADMIN").first()
+
     evaluador_id = admin.id if admin else 1
 
     for user in usuarios_creados:
-        # Verificar si ya tiene evaluaciones para no duplicar masivamente
-        count = db.query(Evaluacion).filter(Evaluacion.evaluado_id == user.id).count()
-        if count < 2:
-            for _ in range(3 - count):
+        # Requisito: 2 o 3 evaluaciones para cada uno
+        # Evitar duplicados si se corre varias veces
+        existing_count = db.query(Evaluacion).filter(Evaluacion.evaluado_id == user.id).count()
+        needed = random.randint(2, 3)
+
+        if existing_count < needed:
+            for _ in range(needed - existing_count):
                 metricas = {
-                    "obj_cumplimiento": random.randint(60, 100),
-                    "puntualidad_asistencia": random.randint(50, 95),
-                    "calidad_trabajo": random.randint(70, 100),
-                    "productividad": random.randint(65, 95),
-                    "trabajo_equipo": random.randint(60, 100),
-                    "conocimiento_habilidad": random.randint(75, 100),
-                    "comunicacion": random.randint(50, 90),
-                    "adaptabilidad": random.randint(70, 100),
-                    "iniciativa": random.randint(80, 100),
-                    "responsabilidad": random.randint(85, 100),
-                    "actitud_profesional": random.randint(80, 100),
-                    "desarrollo_profesional": random.randint(70, 100),
+                    "obj_cumplimiento": random.randint(70, 100),
+                    "puntualidad_asistencia": random.randint(60, 95),
+                    "calidad_trabajo": random.randint(75, 100),
+                    "productividad": random.randint(70, 95),
+                    "trabajo_equipo": random.randint(65, 100),
+                    "conocimiento_habilidad": random.randint(80, 100),
+                    "comunicacion": random.randint(60, 90),
+                    "adaptabilidad": random.randint(75, 100),
+                    "iniciativa": random.randint(85, 100),
+                    "responsabilidad": random.randint(90, 100),
+                    "actitud_profesional": random.randint(85, 100),
+                    "desarrollo_profesional": random.randint(75, 100),
                 }
 
                 promedio = sum(metricas.values()) / len(metricas)
@@ -83,15 +99,15 @@ def seed_data():
                 ev = Evaluacion(
                     evaluado_id=user.id,
                     evaluador_id=evaluador_id,
-                    tipo_evaluacion="Auditoría de Semilla",
-                    relacion_evaluador="Administración",
+                    tipo_evaluacion="Auditoría de Desempeño",
+                    relacion_evaluador="Supervisor",
                     comentarios_texto=random.choice(comentarios),
                     puntuacion_promedio=round(promedio, 1),
-                    fecha=datetime.utcnow() - timedelta(days=random.randint(1, 30)),
+                    fecha=datetime.utcnow() - timedelta(days=random.randint(1, 60)),
                     **metricas
                 )
                 db.add(ev)
-            print(f"📊 Evaluaciones creadas para: {user.nombre}")
+            print(f"📊 {needed - existing_count} evaluaciones generadas para: {user.nombre}")
 
     db.commit()
     db.close()
