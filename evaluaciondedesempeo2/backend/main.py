@@ -98,7 +98,6 @@ def enviar_correo_emailjs(email_destino, codigo):
             'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0'
         })
-        # Aumentamos el timeout para evitar cortes
         with urllib.request.urlopen(req, timeout=20) as response:
             res_body = response.read().decode('utf-8')
             if response.status == 200:
@@ -109,11 +108,9 @@ def enviar_correo_emailjs(email_destino, codigo):
                 return False
     except Exception as e:
         logger.error(f"❌ Fallo crítico al enviar correo: {str(e)}")
-        # Siempre mostramos el código en consola como plan B
         print(f"\n🔑 [CÓDIGO GENERADO] Para {email_destino}: {codigo}\n")
         return False
 
-# --- ACTUALIZACIÓN DE SEGURIDAD PARA EL ADMIN ---
 def create_default_admin():
     email = os.getenv("ADMIN_EMAIL")
     password = os.getenv("ADMIN_PASSWORD")
@@ -179,6 +176,38 @@ class EvaluacionCreate(BaseModel):
 
 app = FastAPI(title="InsightHR Unified Master API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# --- FUNCIONES DE CÁLCULO COMPARTIDAS ---
+
+def calcular_resumen(uid: int, db: Session):
+    metrics = list(METRIC_LABELS.keys())
+    scores = []
+    total_evals = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).count()
+
+    for m in metrics:
+        val = db.query(func.avg(getattr(Evaluacion, m))).filter(Evaluacion.evaluado_id == uid).scalar()
+        scores.append(round(float(val or 0.0), 1))
+
+    last_ev = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).order_by(Evaluacion.fecha.desc()).first()
+    analisis_ia = None
+    if last_ev:
+        analisis_ia = ai_engine.analizar_comentarios(last_ev.comentarios_texto or "Sin comentarios", last_ev.puntuacion_promedio or 0.0)
+
+    avg_total = round(sum(scores) / len(scores), 1) if scores else 0.0
+
+    kpis = {
+        "Eficiencia Operativa": round(sum(scores[0:4]) / 4, 1) if scores else 0.0,
+        "Competencias Blandas": round(sum(scores[4:8]) / 4, 1) if scores else 0.0,
+        "Potencial y Crecimiento": round(sum(scores[8:12]) / 4, 1) if scores else 0.0
+    }
+
+    return {
+        "scores": scores,
+        "analisis_ia": analisis_ia,
+        "kpis": kpis,
+        "total_evals": total_evals,
+        "avg_total": avg_total
+    }
 
 # --- RUTAS DE USUARIO ---
 
@@ -299,44 +328,15 @@ async def crear_ev(data: EvaluacionCreate, db: Session = Depends(get_db), curren
     db.add(db_ev); db.commit()
     return {"status": "ok"}
 
-def calcular_resumen(uid: int, db: Session):
-    metrics = list(METRIC_LABELS.keys())
-    labels = ["Obj", "Punt", "Calid", "Prod", "Equip", "Skill", "Comu", "Adap", "Inic", "Resp", "Actit", "Desa"]
-    scores = []
-
-    total_evals = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).count()
-
-    for m in metrics:
-        val = db.query(func.avg(getattr(Evaluacion, m))).filter(Evaluacion.evaluado_id == uid).scalar()
-        scores.append(round(float(val or 0.0), 1))
-
-    last_ev = db.query(Evaluacion).filter(Evaluacion.evaluado_id == uid).order_by(Evaluacion.fecha.desc()).first()
-    analisis_ia = None
-    if last_ev:
-        analisis_ia = ai_engine.analizar_comentarios(last_ev.comentarios_texto or "Sin comentarios", last_ev.puntuacion_promedio or 0.0)
-
-    avg_total = round(sum(scores) / len(scores), 1) if scores else 0.0
-
-    kpis = {
-        "Eficiencia Operativa": round(sum(scores[0:4]) / 4, 1) if scores else 0.0,
-        "Competencias Blandas": round(sum(scores[4:8]) / 4, 1) if scores else 0.0,
-        "Potencial y Crecimiento": round(sum(scores[8:12]) / 4, 1) if scores else 0.0
-    }
-
-    return {
-        "labels": labels,
-        "scores": scores,
-        "analisis_ia": analisis_ia,
-        "kpis": kpis,
-        "total_evals": total_evals,
-        "avg_total": avg_total
-    }
-
 @app.get("/api/evaluaciones/resumen/{uid}")
 def resumen(uid: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     if current_user.rol != "ADMIN" and current_user.id != uid:
         raise HTTPException(status_code=403, detail="No autorizado para ver este resumen")
-    return calcular_resumen(uid, db)
+
+    data = calcular_resumen(uid, db)
+    # Agregamos labels para la gráfica del frontend
+    data["labels"] = ["Obj", "Punt", "Calid", "Prod", "Equip", "Skill", "Comu", "Adap", "Inic", "Resp", "Actit", "Desa"]
+    return data
 
 @app.get("/api/reporte/{usuario_id}")
 async def download_report(usuario_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -346,39 +346,56 @@ async def download_report(usuario_id: int, db: Session = Depends(get_db), curren
     u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not u: raise HTTPException(status_code=404)
 
+    # 1. Obtener datos centralizados
     data = calcular_resumen(u.id, db)
 
     pdf = FPDF()
     pdf.add_page()
 
-    # Encabezado
+    # Encabezado con fecha
     pdf.set_font("Arial", "B", 18)
-    pdf.set_text_color(30, 58, 138) # Indigo
-    pdf.cell(190, 15, "INSIGHTHR - REPORTE ESTRATÉGICO", ln=True, align="C")
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(190, 15, "INSIGHTHR - REPORTE DE DESEMPEÑO", ln=True, align="C")
     pdf.set_font("Arial", "", 10)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(190, 5, f"Generado el: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
+    pdf.cell(190, 5, f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, align="C")
     pdf.ln(10)
 
-    # Información General
+    # Información del Usuario y Conteo de Evaluaciones
     pdf.set_fill_color(248, 250, 252)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(190, 10, f" Colaborador: {u.nombre}", ln=True, fill=True)
     pdf.set_font("Arial", "", 11)
-    pdf.cell(190, 8, f" Email: {u.email}", ln=True, fill=True)
-    pdf.cell(190, 8, f" Rol: {u.rol}", ln=True, fill=True)
+    pdf.cell(190, 8, f" Email: {u.email} | Rol: {u.rol}", ln=True, fill=True)
     pdf.cell(190, 8, f" Evaluaciones promediadas: {data['total_evals']}", ln=True, fill=True)
-    pdf.ln(10)
+    pdf.ln(5)
 
     # Score Global
     pdf.set_fill_color(99, 102, 241)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(190, 15, f" SCORE GLOBAL: {data['avg_total']} / 100", ln=True, align="C", fill=True)
+    pdf.cell(190, 12, f" SCORE GLOBAL: {data['avg_total']} / 100", ln=True, align="C", fill=True)
     pdf.ln(10)
 
-    # KPIs
+    # 2. Tabla de los 12 Indicadores (Formato solicitado)
+    pdf.set_text_color(30, 58, 138)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 10, "DETALLE DE INDICADORES", ln=True)
+
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(130, 8, "Indicador", border=1)
+    pdf.cell(60, 8, "Promedio", border=1, ln=True, align="C")
+
+    pdf.set_font("Arial", "", 11)
+    nombres_indicadores = list(METRIC_LABELS.values())
+    for nombre, valor in zip(nombres_indicadores, data["scores"]):
+        pdf.cell(130, 8, nombre, border=1)
+        pdf.cell(60, 8, f"{valor} / 100", border=1, ln=True, align="C")
+    pdf.ln(10)
+
+    # 3. KPIs Estratégicos
     pdf.set_text_color(30, 58, 138)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(190, 10, "KPIs ESTRATÉGICOS", ln=True)
@@ -389,35 +406,17 @@ async def download_report(usuario_id: int, db: Session = Depends(get_db), curren
         pdf.cell(60, 8, f"{valor} / 100", border="B", ln=True, align="R")
     pdf.ln(10)
 
-    # Tabla de Indicadores
-    pdf.set_text_color(30, 58, 138)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(190, 10, "DETALLE DE INDICADORES (PROMEDIO)", ln=True)
-    pdf.set_fill_color(241, 245, 249)
-    pdf.set_text_color(100, 116, 139)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(130, 8, " INDICADOR", border=1, fill=True)
-    pdf.cell(60, 8, " PUNTAJE", border=1, fill=True, ln=True, align="C")
-
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Arial", "", 10)
-    metrics_list = list(METRIC_LABELS.values())
-    for i, label in enumerate(metrics_list):
-        pdf.cell(130, 8, f" {label}", border=1)
-        pdf.cell(60, 8, f"{data['scores'][i]}", border=1, ln=True, align="C")
-    pdf.ln(10)
-
-    # Análisis IA
+    # 4. Análisis IA (Sentimiento y Cursos)
     if data["analisis_ia"]:
         pdf.set_text_color(30, 58, 138)
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(190, 10, "INSIGHT DE INTELIGENCIA ARTIFICIAL", ln=True)
+        pdf.cell(190, 10, "ANÁLISIS DE COMENTARIOS (IA)", ln=True)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", "B", 10)
         pdf.cell(190, 8, f"Sentimiento Predominante: {data['analisis_ia']['sentimiento']}", ln=True)
         pdf.ln(2)
         pdf.set_font("Arial", "B", 10)
-        pdf.cell(190, 8, "Cursos y Capacitaciones Recomendadas:", ln=True)
+        pdf.cell(190, 8, "Capacitaciones Sugeridas:", ln=True)
         pdf.set_font("Arial", "", 10)
         for curso in data["analisis_ia"]["recomendaciones"]:
             pdf.cell(190, 7, f" > {curso}", ln=True)
